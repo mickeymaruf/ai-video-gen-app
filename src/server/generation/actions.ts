@@ -35,8 +35,12 @@ export async function submitVideoGeneration(
   }
 
   const prompt = [script, visualGuide].filter(Boolean).join("\n\n");
+  const webhookUrl = process.env.APP_URL
+    ? `${process.env.APP_URL}/api/fal/webhook`
+    : undefined;
   const { request_id } = await fal.queue.submit(VIDEO_MODEL, {
     input: { prompt, image_url: imageUrl, prompt_optimizer: true },
+    webhookUrl,
   });
 
   const data = {
@@ -89,12 +93,4 @@ export async function pollVideoGeneration(
     data: { status: "COMPLETED", videoUrl },
   });
   return { status: "COMPLETED", logs, videoUrl };
-}
-
-/** Records a failed generation so the error survives a refresh. */
-export async function failScene(sceneId: string, message: string): Promise<void> {
-  await prisma.scene.update({
-    where: { id: sceneId },
-    data: { status: "ERROR", error: message },
-  });
 }

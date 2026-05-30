@@ -1,0 +1,3 @@
+right now I am facing a problem, which is if i hit generate and then leave the page, it never updates the videoUrl, status stays error if any other error during generation, but it hasn't changed the state from frontend, then even after successful generation from fals api, it stays unconsistent and breaks the ux, what's the solution you think for this. do not write any code, just talk to me about it in short message
+
+Read from https://fal.ai/docs/documentation/model-apis/inference/webhooks.md so you have clear idea how to integrate the plan you did

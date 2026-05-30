@@ -15,7 +15,6 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { ProductImageUploader } from "@/components/editor/product-image-uploader";
 import {
-  failScene,
   pollVideoGeneration,
   submitVideoGeneration,
 } from "@/server/generation/actions";
@@ -158,11 +157,14 @@ export function SceneEditor({
   const [logs, setLogs] = useState<GenerationLog[]>([]);
   const [videoUrl, setVideoUrl] = useState<string | null>(scene.videoUrl);
   const [error, setError] = useState<string | null>(scene.error);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const isGenerating =
     status === "SUBMITTING" || status === "IN_QUEUE" || status === "IN_PROGRESS";
 
-  // Poll for live status/logs until the 9:16 video is ready; persist failures.
+  // Poll for live status/logs until the 9:16 video is ready. Transient errors
+  // are NOT terminal: the webhook (and resume-on-mount) reconcile the real result,
+  // so we leave the scene running and only surface a soft notice.
   async function runPoll(requestId: string) {
     try {
       for (;;) {
@@ -176,12 +178,8 @@ export function SceneEditor({
         }
         await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL));
       }
-    } catch (cause) {
-      const message = cause instanceof Error ? cause.message : "Generation failed.";
-      setStatus("ERROR");
-      setError(message);
-      await failScene(scene.id, message);
-      router.refresh();
+    } catch {
+      setNotice("Connection lost — generation continues in the background. Refresh to check.");
     }
   }
 
@@ -207,6 +205,7 @@ export function SceneEditor({
 
     setStatus("SUBMITTING");
     setError(null);
+    setNotice(null);
     setVideoUrl(null);
     setLogs([]);
 
@@ -367,6 +366,8 @@ export function SceneEditor({
           )}
 
           {error && <p className="text-sm text-destructive">{error}</p>}
+
+          {notice && <p className="text-sm text-muted-foreground">{notice}</p>}
 
           {videoUrl && (
             <video

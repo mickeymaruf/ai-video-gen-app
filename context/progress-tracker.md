@@ -117,7 +117,8 @@ change.
     `IN_QUEUE` (reusing `imageUrl` when no new file is sent), and **forks a new
     scene** instead of overwriting one that already ran;
     `pollVideoGeneration(sceneId, requestId)` persists each status transition and
-    the final `videoUrl`; `failScene` records errors. Logs stay transient.
+    the final `videoUrl`. Logs stay transient. (Error persistence later moved to
+    the webhook — see the webhook entry below.)
   - [x] Routes: `/editor/[projectId]/page.tsx` (RSC: loads projects + active
     project's scenes, active scene from `?scene=`) and `/editor/page.tsx`
     (`force-dynamic`; redirects to latest project or shows the empty state).
@@ -129,6 +130,30 @@ change.
   - [x] `Type` / `Language` / `Model` left as static UI (not persisted) per
     request. `tsc --noEmit`, `eslint`, and `next build` all clean; verified at
     runtime (`/editor` 200/307 redirect, unknown id 404, project page renders).
+- Durable generation sync via **Fal.ai webhooks** — fixes results being lost when
+  the user leaves the page (the browser poll loop was the only thing writing the
+  job result) and scenes getting permanently stuck `ERROR` on a transient client
+  hiccup. fal now pushes the terminal state to the server. Tasks:
+  - [x] `prisma/schema.prisma` — `@@index([requestId])` on `Scene` for webhook
+    lookups (migration `20260530154913_scene_request_id_index`).
+  - [x] `src/lib/fal-webhook.ts` — ED25519 signature verification using fal's
+    JWKS (`https://rest.fal.ai/.well-known/jwks.json`, cached 24h) via Node
+    `crypto` (no new dependency); checks the ±300s timestamp window and the
+    `reqId\nuserId\nts\nsha256(body)` signed message from the `X-Fal-Webhook-*`
+    headers.
+  - [x] `src/app/api/fal/webhook/route.ts` (`runtime = "nodejs"`) — verifies,
+    finds the scene by `request_id`, and writes `COMPLETED` + `videoUrl` (status
+    `OK` w/ payload) or `ERROR` + message (`error`/`payload_error`); idempotent,
+    `revalidatePath`s the project. Unsigned/forged/`GET` → 401/401/405 (verified).
+  - [x] `submitVideoGeneration` passes `webhookUrl` derived from `APP_URL`
+    (omitted when unset → graceful client-poll fallback).
+  - [x] `scene-editor.tsx` — the client poll loop is now non-authoritative: a
+    transient poll error no longer calls `failScene` (removed); it leaves the
+    scene non-terminal and shows a soft "connection lost — refresh to check"
+    notice. Webhook + resume-on-mount reconcile the real result.
+  - [x] `.env` — documented `APP_URL` (prod origin / local tunnel). Local parity
+    needs a tunnel (cloudflared/ngrok); end-to-end webhook delivery is verifiable
+    only with a public URL.
 
 ## In Progress
 
@@ -136,6 +161,8 @@ change.
 
 ## Next Up
 
+- End-to-end webhook test with a tunnel + real fal job (set `APP_URL`, generate,
+  leave the page, confirm the scene reaches `COMPLETED` from the webhook alone).
 - Multi-image handling (model stores a single `imageUrl`; only the first product
   image is sent). Project rename/delete + scene delete/reorder. Export.
 

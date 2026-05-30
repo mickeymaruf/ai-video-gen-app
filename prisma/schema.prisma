@@ -50,4 +50,5 @@ model Scene {
   updatedAt DateTime @updatedAt
 
   @@index([projectId])
+  @@index([requestId])
 }
