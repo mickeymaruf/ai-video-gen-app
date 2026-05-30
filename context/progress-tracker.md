@@ -9,8 +9,8 @@ change.
 
 ## Current Goal
 
-- Feature spec `01-design-system.md` complete; ready to build feature UI
-  on the new primitives.
+- Editor shell (`02.editor.md`) built. Next: wire real project/scene data
+  and the dialog pattern / preview drawer.
 
 ## Completed
 
@@ -22,6 +22,19 @@ change.
   `src/components/ui/`. Added `lucide-react`. `cn()` helper at
   `src/lib/utils.ts`. `tsc --noEmit` clean for all UI components.
   Generated `components/ui/*` files left unmodified.
+- `02.editor.md` — editor shell UI built pixel-to-screenshot. Added
+  `src/components/editor/editor-navbar.tsx` (brand switcher cell width-matched
+  to the sidebar, project title, $1.59, `fal.ai connected` status pill,
+  Export action), `editor-sidebar.tsx` (New Project button, active Project #1
+  with nested selectable scenes + blue tree line, Add Scene ghost button,
+  secondary items), and `scene-editor.tsx` (TYPE/LANGUAGE/MODEL dropdowns,
+  START/END card segmented tabs, Script + Visual Guide textareas with a SOUND
+  toggle, Start Card uploader, product-image thumbs, Generate button).
+  Composed in `src/app/editor/page.tsx`. Built on existing design tokens
+  (blue `--primary`, `--success`, `--accent`); a few arbitrary text sizes
+  (`text-[11px]`/`text-[10px]`) used for pixel-accurate labels per the
+  explicit "pixel perfect" request. `tsc --noEmit` clean for the new files
+  (only pre-existing `lib/worker.ts` error remains).
 - Theme set to **light mode** per updated `context/ui-context.md`
   (light SaaS workspace: gray page, white surfaces, blue accent, green
   success). `globals.css` `:root` rewritten to light tokens with a blue
