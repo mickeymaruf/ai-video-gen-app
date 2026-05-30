@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, Sparkles, Upload, X } from "lucide-react";
+import { ChevronDown, Sparkles, Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
+import { ProductImageUploader } from "@/components/editor/product-image-uploader";
 import { cn } from "@/lib/utils";
 
 const SCRIPT_TEXT =
@@ -124,6 +125,7 @@ function SoundToggle() {
  */
 export function SceneEditor() {
   const [cardSide, setCardSide] = useState<"start" | "end">("start");
+  const [productImages, setProductImages] = useState<File[]>([]);
 
   return (
     <Card className="gap-5 rounded-xl p-5 ring-2 ring-primary">
@@ -196,32 +198,10 @@ export function SceneEditor() {
       <div className="flex items-end justify-between gap-4">
         <div className="flex flex-col gap-2">
           <FieldLabel>Product Images</FieldLabel>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="flex size-16 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-border text-muted-foreground transition-colors hover:bg-muted"
-            >
-              <Upload className="size-4" />
-              <span className="text-[10px] font-medium tracking-wide uppercase">
-                Upload
-              </span>
-            </button>
-
-            {[0, 1].map((index) => (
-              <div
-                key={index}
-                className="relative size-16 overflow-hidden rounded-lg bg-foreground"
-              >
-                <button
-                  type="button"
-                  aria-label="Remove image"
-                  className="absolute right-1 top-1 flex size-4 items-center justify-center rounded-full bg-destructive text-primary-foreground"
-                >
-                  <X className="size-2.5" />
-                </button>
-              </div>
-            ))}
-          </div>
+          <ProductImageUploader
+            images={productImages}
+            onChange={setProductImages}
+          />
         </div>
 
         <Button className="h-12 rounded-lg px-8 text-sm font-semibold">

@@ -9,8 +9,9 @@ change.
 
 ## Current Goal
 
-- Editor shell (`02.editor.md`) built. Next: wire real project/scene data
-  and the dialog pattern / preview drawer.
+- Editor shell (`02.editor.md`) built and the Product Images input
+  (`03.upload-product-image.md`) extracted into a reusable dropzone. Next:
+  wire real project/scene data and the dialog pattern / preview drawer.
 
 ## Completed
 
@@ -40,6 +41,29 @@ change.
   success). `globals.css` `:root` rewritten to light tokens with a blue
   `--primary`/`--ring` and an added `--success` token; the `.dark` block
   was removed (no dark mode). No `dark` class on `<html>` in `layout.tsx`.
+- `03.upload-product-image.md` — extracted the inline Product Images upload
+  from `scene-editor.tsx` into a reusable
+  `src/components/editor/product-image-uploader.tsx`. Tasks:
+  - [x] Installed `react-dropzone`.
+  - [x] Built a controlled `ProductImageUploader`
+    (`interface { images: File[]; onChange: (images: File[]) => void }`,
+    no `any`) using `useDropzone` for multi-image add via drag-and-drop or
+    click (`accept: { 'image/*': [] }`, `multiple: true`).
+  - [x] Dashed drop zone reuses the existing `size-16` upload-tile styling
+    with a blue active tint (`border-primary bg-primary/10 text-primary`)
+    while dragging over.
+  - [x] Selected files render as a thumbnail row, each with a hover remove
+    (`X`) button; previews use `URL.createObjectURL` (derived via `useMemo`)
+    and are revoked on change/unmount to avoid leaks.
+  - [x] `scene-editor.tsx` lifts the image list into state
+    (`useState<File[]>`) and passes it down; the inline Upload button +
+    placeholder thumbnails are gone, the `FieldLabel` "Product Images"
+    heading is reused, and the now-unused `X` import was removed.
+  - [x] `tsc --noEmit` clean for the feature (only the pre-existing
+    `lib/worker.ts` error remains); ESLint reports zero problems for the
+    new/changed files. Pre-existing lint errors in unrelated Fal.ai-pipeline
+    files (`app/editor-test/page.tsx`, `lib/jobStore.ts`, `lib/worker.ts`)
+    were left untouched per strict scope.
 
 ## In Progress
 
