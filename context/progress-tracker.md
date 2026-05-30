@@ -5,23 +5,36 @@ change.
 
 ## Current Phase
 
-- [e.g. Not started / In progress / Complete]
+- In progress
 
 ## Current Goal
 
-- [What you are building right now]
+- Feature spec `01-design-system.md` complete; ready to build feature UI
+  on the new primitives.
 
 ## Completed
 
-- None yet.
+- Basic AI video generation pipeline (Fal.ai) with job polling — see
+  Session Notes below.
+- `01-design-system.md` — shadcn/ui design system installed and configured
+  (`base-nova` style, `neutral` base color, base-ui primitives). Added
+  Button, Card, Dialog, Dropdown Menu, Input, Tabs, Textarea to
+  `src/components/ui/`. Added `lucide-react`. `cn()` helper at
+  `src/lib/utils.ts`. `tsc --noEmit` clean for all UI components.
+  Generated `components/ui/*` files left unmodified.
+- Theme set to **light mode** per updated `context/ui-context.md`
+  (light SaaS workspace: gray page, white surfaces, blue accent, green
+  success). `globals.css` `:root` rewritten to light tokens with a blue
+  `--primary`/`--ring` and an added `--success` token; the `.dark` block
+  was removed (no dark mode). No `dark` class on `<html>` in `layout.tsx`.
 
 ## In Progress
 
-- None yet.
+- None.
 
 ## Next Up
 
-- [First unit to build]
+- Build feature UI on top of the new primitives (projects / scenes / generation).
 
 ## Open Questions
 
@@ -36,15 +49,4 @@ change.
 
 ## Session Notes
 
-- `src/app/api/generate/route.ts` wired to `fal-ai/ltx-video/image-to-video`
-  — fal.ai's cheapest image-to-video model (~$0.02 per 5s clip), chosen for
-  low-cost UGC testing. Flow: upload product image to fal storage
-  (`fal.storage.upload`) → get `image_url` → `fal.subscribe(...)` with a
-  motion `prompt` → output `result.data.video.url`.
-- Job result now stores `video` (was `image`). `page.tsx` renders a
-  `<video>` (autoplay/loop/muted) + download link instead of an `<img>`.
-- The prompt should describe MOTION/camera, not the static scene.
-- Requires `FAL_KEY` in env. Workflow: page.tsx → POST /api/generate →
-  jobId → poll /api/generate-status → display result.video.
-- Upgrade paths for higher UGC quality (pricier): `fal-ai/kling-video`
-  (~$0.07/s), `fal-ai/wan` (~$0.05/s), `fal-ai/minimax` Hailuo (~$0.49/video).
+- 

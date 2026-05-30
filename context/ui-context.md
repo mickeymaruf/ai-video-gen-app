@@ -2,56 +2,76 @@
 
 ## Theme
 
-[Describe the overall visual language — e.g. Dark only.
-No light mode. The design language is a dark technical
-workspace — near-black backgrounds, layered surfaces,
-and vivid accent colors for interactive elements.]
+Light only. No dark mode. The design language is a clean SaaS workspace
+focused on project management and AI video generation. The interface uses
+white surfaces, subtle gray borders, and blue accent actions.
 
 ## Colors
 
-[Define your color tokens as CSS custom properties.
-All components must use these tokens — no hardcoded
-hex values.]
+The interface primarily uses white surfaces with a blue accent color for
+primary actions and active states.
 
-| Role            | CSS Variable       | Value    |
-| --------------- | ------------------ | -------- |
-| Page background | `--bg-base`        | `#[hex]` |
-| Surface         | `--bg-surface`     | `#[hex]` |
-| Primary text    | `--text-primary`   | `#[hex]` |
-| Muted text      | `--text-muted`     | `#[hex]` |
-| Primary accent  | `--accent-primary` | `#[hex]` |
-| Border          | `--border-default` | `#[hex]` |
-| Error           | `--state-error`    | `#[hex]` |
-| Success         | `--state-success`  | `#[hex]` |
+| Role | Usage |
+| ------ | ------ |
+| Page background | Light gray workspace background |
+| Surface | White panels and cards |
+| Primary accent | Blue buttons, active states, and highlights |
+| Primary text | Dark gray text |
+| Secondary text | Muted gray labels and metadata |
+| Border | Light gray panel and input borders |
+| Success | Green connection status indicator |
+
+Exact color tokens should be defined in the application's design system
+or CSS variables rather than inferred from the UI.
 
 ## Typography
 
-| Role      | Font              | Variable      |
-| --------- | ----------------- | ------------- |
-| UI text   | [e.g. Geist Sans] | `--font-sans` |
-| Code/mono | [e.g. Geist Mono] | `--font-mono` |
+| Role | Usage |
+| ------ | ------ |
+| Page titles | Project names and major headings |
+| Section headings | Scene and editor section labels |
+| Body text | Form content and editor text |
+| Metadata | Timestamps and status information |
+
+The UI uses a modern sans-serif typeface.
 
 ## Border Radius
 
-| Context           | Class            |
-| ----------------- | ---------------- |
-| Inline / small UI | `rounded-[size]` |
-| Cards / panels    | `rounded-[size]` |
-| Modals / overlays | `rounded-[size]` |
+Rounded corners are used consistently throughout the interface.
+
+| Context | Usage |
+| ------ | ------ |
+| Buttons | Rounded corners |
+| Inputs | Rounded corners |
+| Panels | Rounded corners |
+| Upload areas | Rounded corners |
+
+Exact radius values should come from design tokens.
 
 ## Component Library
 
-[e.g. shadcn/ui on top of Tailwind. Components live
-in components/ui/. Use the CLI to add new components
-rather than writing from scratch.]
+The UI contains the following component types:
+
+- Button
+- Card / Panel
+- Input
+- Textarea
+- Select Dropdown
+- Sidebar Navigation
+- Upload Area
+- Status Indicator
+
+The underlying component library is not identifiable from the design
+alone.
 
 ## Layout Patterns
 
-- [Pattern — e.g. Editor: full-viewport split with
-  left sidebar, center canvas, right sidebar]
-- [Pattern — e.g. Sidebars: fixed width with border separator]
-- [Pattern — e.g. Modals: centered overlay with backdrop blur]
-- [Pattern — e.g. Navbar: top bar with bottom border]
+- Application shell with fixed left sidebar and main workspace
+- Project navigation in the left sidebar
+- Top toolbar containing project information and global actions
+- Main editor panel for scene configuration
+- Vertical scene list within projects
+- Dedicated upload areas for assets and start cards
 
 ## Icons
 
