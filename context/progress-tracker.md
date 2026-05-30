@@ -159,6 +159,33 @@ change.
 
 - None.
 
+## Completed (continued)
+
+- `08-refine-project-creation.md` — project creation/settings modal. The Stitch
+  screen (project `15708072907553766876`, screen
+  `6d1c1207cca849aca4cac318f513b172`) was not retrievable (no Stitch tool/public
+  URL in this environment), so the modal follows the spec's content + the existing
+  light-SaaS design system. Tasks:
+  - [x] Schema: `Project.aspectRatio String @default("9:16")` (`"9:16" | "16:9" |
+    "1:1"`); migration `20260530172115_project_aspect_ratio` applied, client
+    regenerated.
+  - [x] `src/server/projects/actions.ts` — `createProject({ title, aspectRatio })`
+    now takes a name (modal create flow); added `updateProject(projectId, { title,
+    aspectRatio })` (the modal Save action, server-side ratio validation). Project
+    cost intentionally skipped per spec.
+  - [x] `src/components/editor/project-settings-modal.tsx` — one reusable modal:
+    **create** mode (name + aspect ratio → create + navigate) and **settings** mode
+    (rename + aspect ratio → save + refresh). Aspect ratio shown as a 3-up selector
+    with ratio-shaped previews. Shared aspect-ratio type/options in
+    `src/types/project.ts` (`ASPECT_RATIOS`, `AspectRatio`).
+  - [x] `editor-sidebar.tsx` — New Project now opens the modal in create mode
+    (no longer creates immediately); the per-project gear is a real button opening
+    the same modal in settings mode. `ProjectSummary` carries `aspectRatio`
+    (selected in `/editor/[projectId]` query).
+  - [x] `loading.tsx` with a centered animated `Loader2` spinner at `/editor` and
+    `/editor/[projectId]`.
+  - [x] `tsc --noEmit`, `eslint`, and `next build` all clean.
+
 ## Next Up
 
 - End-to-end webhook test with a tunnel + real fal job (set `APP_URL`, generate,

@@ -4,6 +4,7 @@ import { EditorNavbar } from "@/components/editor/editor-navbar";
 import { EditorSidebar } from "@/components/editor/editor-sidebar";
 import { SceneEditor } from "@/components/editor/scene-editor";
 import { prisma } from "@/lib/prisma";
+import type { AspectRatio } from "@/types/project";
 
 /**
  * Editor for a single project. The project id lives in the path and the active
@@ -23,7 +24,7 @@ export default async function ProjectEditorPage({
   const [projects, project] = await Promise.all([
     prisma.project.findMany({
       orderBy: { updatedAt: "desc" },
-      select: { id: true, title: true },
+      select: { id: true, title: true, aspectRatio: true },
     }),
     prisma.project.findUnique({
       where: { id: projectId },
@@ -42,7 +43,10 @@ export default async function ProjectEditorPage({
       <EditorNavbar title={project.title} />
       <div className="flex flex-1 overflow-hidden">
         <EditorSidebar
-          projects={projects}
+          projects={projects.map((p) => ({
+            ...p,
+            aspectRatio: p.aspectRatio as AspectRatio,
+          }))}
           scenes={scenes.map((s) => ({ id: s.id, order: s.order, status: s.status }))}
           activeProjectId={project.id}
           activeSceneId={activeScene?.id}
