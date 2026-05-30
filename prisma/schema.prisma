@@ -1,0 +1,53 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum GenStatus {
+  IDLE
+  SUBMITTING
+  IN_QUEUE
+  IN_PROGRESS
+  COMPLETED
+  ERROR
+}
+
+model Project {
+  id        String   @id @default(cuid())
+  title     String   @default("Untitled Project")
+  scenes    Scene[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Scene {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  order     Int     @default(0) // position in the project
+
+  // editor inputs
+  script      String  @default("")
+  visualGuide String  @default("")
+  imageUrl    String? // fal.storage URL of the product image
+
+  // fal.ai job state (this is what survives refresh)
+  requestId String? // fal queue request id — used to resume polling
+  status    GenStatus @default(IDLE)
+  videoUrl  String? // populated on COMPLETED
+  error     String? // populated on ERROR
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+}

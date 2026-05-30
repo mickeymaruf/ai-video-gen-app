@@ -157,7 +157,9 @@ export function SceneEditor() {
   const [error, setError] = useState<string | null>(null);
 
   const isGenerating =
-    status === "submitting" || status === "IN_QUEUE" || status === "IN_PROGRESS";
+    status === "submitting" ||
+    status === "IN_QUEUE" ||
+    status === "IN_PROGRESS";
 
   // Submit to the Fal.ai queue, then poll for live status/logs until the 9:16
   // video is ready — kept off the render thread so the UI never blocks.
@@ -223,7 +225,12 @@ export function SceneEditor() {
           <MetaSelect
             label="Model"
             value="Google Veo 3"
-            options={["Google Veo 3", "Kling 1.6", "Luma Ray 2", "Runway Gen-3"]}
+            options={[
+              "Google Veo 3",
+              "Kling 1.6",
+              "Luma Ray 2",
+              "Runway Gen-3",
+            ]}
           />
           <div className="ml-auto">
             <CardSideTabs value={cardSide} onChange={setCardSide} />

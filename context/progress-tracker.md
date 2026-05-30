@@ -88,6 +88,23 @@ change.
     `object-contain`) since this model derives ratio from the input image and
     exposes no aspect/resolution param — see Architecture Decisions.
   - `tsc --noEmit` and `eslint` both clean for all new/changed files.
+- `05-projects-database.md` (schema layer) — minimal **Project → Scene** Prisma
+  models so a project persists and survives refresh, including in-flight Fal.ai
+  jobs. Owner/auth and `logs` intentionally deferred (see Architecture
+  Decisions). Tasks:
+  - [x] `prisma/schema.prisma` — `GenStatus` enum
+    (`IDLE`/`SUBMITTING`/`IN_QUEUE`/`IN_PROGRESS`/`COMPLETED`/`ERROR`),
+    `Project` (`id` cuid, `title`, timestamps, `scenes Scene[]`), and `Scene`
+    (`projectId` + cascade relation, `order`, editor inputs `script`/
+    `visualGuide`/`imageUrl`, Fal.ai job state `requestId`/`status`/`videoUrl`/
+    `error`, timestamps, `@@index([projectId])`).
+  - [x] `src/lib/prisma.ts` — dev-safe `globalThis` client singleton using the
+    `@prisma/adapter-pg` driver adapter with `DATABASE_URL`; imports the
+    generated client from `app/generated/prisma/client`.
+  - [x] Migration `20260530135702_init_project_scene` applied to the pooled
+    Postgres DB; client generated to `app/generated/prisma`. Verified with a
+    throwaway smoke test (create Project + nested Scene, read back via relation,
+    `status` defaults to `IDLE`, cascade delete) — since removed.
 
 ## In Progress
 
@@ -95,8 +112,11 @@ change.
 
 ## Next Up
 
-- Persistence: PostgreSQL + Prisma models for projects / scenes / jobs and
-  saving completed video URLs (storage model still "Not yet specified").
+- Wire persistence into the app (the next step after this schema layer):
+  create-project action, `/editor/[id]` dynamic route + URL update on create,
+  read/write Scene rows from the editor, and resume-on-refresh polling via the
+  stored `requestId`. Also converge the editor's lowercase `GenStatus` union
+  with the uppercase DB enum.
 - Wire real project/scene data into the sidebar/editor; multi-image handling
   (currently only the first product image is sent to the model).
 
@@ -123,6 +143,13 @@ change.
   The hardcoded 9:16 requirement is satisfied with the `aspect-portrait` token +
   `object-contain` on the `<video>`, avoiding an invalid param that would break
   submission.
+- **Minimal Project model first; owner and logs deferred**: the persistence
+  schema intentionally omits any `userId`/owner field (no auth provider yet) and
+  does not persist Fal.ai `logs` — logs are re-fetchable from Fal via the stored
+  `Scene.requestId`, which is the single field that makes resume-after-refresh
+  possible. `Project → Scene` (not one embedded table) was chosen to match the
+  multi-scene model in `architecture.md` and avoid reworking the row shape when
+  scene #2 lands.
 
 - Goal: generate UGC-style video ads from a product image (image-to-video).
 
