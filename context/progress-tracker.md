@@ -9,9 +9,10 @@ change.
 
 ## Current Goal
 
-- Editor shell (`02.editor.md`) built and the Product Images input
-  (`03.upload-product-image.md`) extracted into a reusable dropzone. Next:
-  wire real project/scene data and the dialog pattern / preview drawer.
+- Fal.ai image-to-video generation (`04-fal-ai-integration.md`) wired into the
+  Scene Editor via server actions with queued polling, live logs, and a 9:16
+  video preview. Next: wire real project/scene data and persistence, then the
+  dialog pattern / preview drawer.
 
 ## Completed
 
@@ -64,6 +65,29 @@ change.
     new/changed files. Pre-existing lint errors in unrelated Fal.ai-pipeline
     files (`app/editor-test/page.tsx`, `lib/jobStore.ts`, `lib/worker.ts`)
     were left untouched per strict scope.
+- `04-fal-ai-integration.md` — Scene Editor wired to Fal.ai
+  `fal-ai/minimax-video/image-to-video` through **server actions** (no API
+  route handlers), per invariant #8 (single Fal.ai service layer):
+  - `src/lib/fal.ts` — configures the `@fal-ai/client` singleton from
+    `process.env.FAL_KEY` (server-only) and exports the `VIDEO_MODEL` id.
+  - `src/server/generation/actions.ts` (`'use server'`) — `submitVideoGeneration`
+    uploads the first product `File` via `fal.storage.upload`, then
+    `fal.queue.submit`s `{ prompt, image_url, prompt_optimizer }` (prompt =
+    Script + Visual Guide joined) and returns the `request_id`;
+    `pollVideoGeneration` returns one `{ status, logs, videoUrl }` snapshot
+    (`fal.queue.status` with `logs: true`, then `fal.queue.result` on COMPLETED).
+  - `src/types/generation.ts` — `QueueState`, `GenerationLog`, `PollResult`,
+    `MinimaxVideoOutput` (no `any`).
+  - `scene-editor.tsx` — Script/Visual Guide are now controlled; **Generate**
+    submits FormData (script, visualGuide, first product image) then runs a
+    non-blocking poll loop (1.5s) updating live status + logs. A second Card
+    below the editor shows the status pill, a scrollable mono log panel, errors,
+    and the finished `<video>` (autoplay/loop, 9:16). Existing editor layout
+    untouched.
+  - 9:16 enforced at the render layer (`--aspect-portrait: 9 / 16` token +
+    `object-contain`) since this model derives ratio from the input image and
+    exposes no aspect/resolution param — see Architecture Decisions.
+  - `tsc --noEmit` and `eslint` both clean for all new/changed files.
 
 ## In Progress
 
@@ -71,16 +95,34 @@ change.
 
 ## Next Up
 
-- Build feature UI on top of the new primitives (projects / scenes / generation).
+- Persistence: PostgreSQL + Prisma models for projects / scenes / jobs and
+  saving completed video URLs (storage model still "Not yet specified").
+- Wire real project/scene data into the sidebar/editor; multi-image handling
+  (currently only the first product image is sent to the model).
 
 ## Open Questions
 
-- [Any unresolved product or technical decisions]
+- Storage provider for uploaded images / generated videos is still
+  unspecified in `architecture.md` (currently relying on Fal.ai's ephemeral
+  storage for the input image and the returned `fal.media` URL).
+- Auth provider is unspecified; server actions are not yet ownership-guarded
+  (invariant: "All API requests validate ownership before performing mutations").
 
 ## Architecture Decisions
 
-- [Decisions made that affect the system design or
-  data model — include why the decision was made]
+- **Fal.ai isolated behind a single service layer** (invariant #8): the client
+  lives in `src/lib/fal.ts` and all generation operations in
+  `src/server/generation/actions.ts`. UI never talks to Fal.ai directly.
+- **Generation runs via queue + client polling, not synchronous request work**
+  (invariant #1): `submit` returns a `request_id` immediately; the client polls
+  `status`/`result` through server actions, so no request handler blocks on the
+  long-running job.
+- **9:16 applied at the render layer, not the model input**: confirmed via the
+  endpoint's OpenAPI schema that `fal-ai/minimax-video/image-to-video` accepts
+  only `prompt`, `image_url`, `prompt_optimizer` — no aspect/resolution field.
+  The hardcoded 9:16 requirement is satisfied with the `aspect-portrait` token +
+  `object-contain` on the `<video>`, avoiding an invalid param that would break
+  submission.
 
 - Goal: generate UGC-style video ads from a product image (image-to-video).
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, Sparkles, Upload } from "lucide-react";
+import { ChevronDown, Loader2, Sparkles, Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -13,10 +13,33 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
 import { ProductImageUploader } from "@/components/editor/product-image-uploader";
+import {
+  pollVideoGeneration,
+  submitVideoGeneration,
+} from "@/server/generation/actions";
+import type { GenerationLog } from "@/types/generation";
 import { cn } from "@/lib/utils";
 
 const SCRIPT_TEXT =
   "A cinematic aerial shot panning over a neon-drenched futuristic city at midnight. Rain glistens on metallic surfaces.";
+
+type GenStatus =
+  | "idle"
+  | "submitting"
+  | "IN_QUEUE"
+  | "IN_PROGRESS"
+  | "COMPLETED"
+  | "error";
+
+const STATUS_LABEL: Record<Exclude<GenStatus, "idle">, string> = {
+  submitting: "Uploading & submitting…",
+  IN_QUEUE: "Queued…",
+  IN_PROGRESS: "Generating…",
+  COMPLETED: "Generation complete",
+  error: "Generation failed",
+};
+
+const POLL_INTERVAL = 1500;
 
 /** Compact labelled dropdown used for the scene's TYPE / LANGUAGE / MODEL. */
 function MetaSelect({
@@ -126,89 +149,182 @@ function SoundToggle() {
 export function SceneEditor() {
   const [cardSide, setCardSide] = useState<"start" | "end">("start");
   const [productImages, setProductImages] = useState<File[]>([]);
+  const [script, setScript] = useState(SCRIPT_TEXT);
+  const [visualGuide, setVisualGuide] = useState(SCRIPT_TEXT);
+  const [status, setStatus] = useState<GenStatus>("idle");
+  const [logs, setLogs] = useState<GenerationLog[]>([]);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const isGenerating =
+    status === "submitting" || status === "IN_QUEUE" || status === "IN_PROGRESS";
+
+  // Submit to the Fal.ai queue, then poll for live status/logs until the 9:16
+  // video is ready — kept off the render thread so the UI never blocks.
+  async function handleGenerate() {
+    if (productImages.length === 0) {
+      setStatus("error");
+      setError("Add at least one product image before generating.");
+      return;
+    }
+
+    setStatus("submitting");
+    setError(null);
+    setVideoUrl(null);
+    setLogs([]);
+
+    try {
+      const formData = new FormData();
+      formData.set("script", script);
+      formData.set("visualGuide", visualGuide);
+      formData.set("image", productImages[0]);
+
+      const requestId = await submitVideoGeneration(formData);
+
+      for (;;) {
+        const result = await pollVideoGeneration(requestId);
+        setLogs(result.logs);
+        setStatus(result.status);
+        if (result.status === "COMPLETED") {
+          setVideoUrl(result.videoUrl);
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL));
+      }
+    } catch (cause) {
+      setStatus("error");
+      setError(cause instanceof Error ? cause.message : "Generation failed.");
+    }
+  }
 
   return (
-    <Card className="gap-5 rounded-xl p-5 ring-2 ring-primary">
-      {/* Header row: scene meta + reference-card tabs */}
-      <div className="flex flex-wrap items-center gap-3">
-        <span className="text-xs font-bold tracking-wide text-foreground uppercase">
-          Scene #1
-        </span>
-        <MetaSelect
-          label="Type"
-          value="Cinematic"
-          options={["Cinematic", "UGC", "Product", "Lifestyle"]}
-        />
-        <MetaSelect
-          label="Language"
-          value="Spanish (Argentina)"
-          options={[
-            "Spanish (Argentina)",
-            "Spanish (Spain)",
-            "English (US)",
-            "Portuguese (Brazil)",
-          ]}
-        />
-        <MetaSelect
-          label="Model"
-          value="Google Veo 3"
-          options={["Google Veo 3", "Kling 1.6", "Luma Ray 2", "Runway Gen-3"]}
-        />
-        <div className="ml-auto">
-          <CardSideTabs value={cardSide} onChange={setCardSide} />
-        </div>
-      </div>
-
-      {/* Body: prompts (left) + reference-card uploader (right) */}
-      <div className="flex gap-5">
-        <div className="flex flex-1 flex-col gap-4">
-          <div className="flex flex-col gap-2">
-            <FieldLabel>Script</FieldLabel>
-            <Textarea
-              defaultValue={SCRIPT_TEXT}
-              className="min-h-20 resize-none bg-card"
-            />
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <FieldLabel>Visual Guide</FieldLabel>
-              <SoundToggle />
-            </div>
-            <Textarea
-              defaultValue={SCRIPT_TEXT}
-              className="min-h-20 resize-none bg-card"
-            />
-          </div>
-        </div>
-
-        {/* Start / End reference card upload */}
-        <button
-          type="button"
-          className="flex w-52 shrink-0 flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border text-center transition-colors hover:bg-muted"
-        >
-          <Upload className="size-5 text-muted-foreground" />
-          <span className="text-sm text-muted-foreground">
-            + Upload {cardSide === "start" ? "Start" : "End"} Card
+    <div className="flex flex-col gap-5">
+      <Card className="gap-5 rounded-xl p-5 ring-2 ring-primary">
+        {/* Header row: scene meta + reference-card tabs */}
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-xs font-bold tracking-wide text-foreground uppercase">
+            Scene #1
           </span>
-        </button>
-      </div>
-
-      {/* Footer: product images + generate */}
-      <div className="flex items-end justify-between gap-4">
-        <div className="flex flex-col gap-2">
-          <FieldLabel>Product Images</FieldLabel>
-          <ProductImageUploader
-            images={productImages}
-            onChange={setProductImages}
+          <MetaSelect
+            label="Type"
+            value="Cinematic"
+            options={["Cinematic", "UGC", "Product", "Lifestyle"]}
           />
+          <MetaSelect
+            label="Language"
+            value="Spanish (Argentina)"
+            options={[
+              "Spanish (Argentina)",
+              "Spanish (Spain)",
+              "English (US)",
+              "Portuguese (Brazil)",
+            ]}
+          />
+          <MetaSelect
+            label="Model"
+            value="Google Veo 3"
+            options={["Google Veo 3", "Kling 1.6", "Luma Ray 2", "Runway Gen-3"]}
+          />
+          <div className="ml-auto">
+            <CardSideTabs value={cardSide} onChange={setCardSide} />
+          </div>
         </div>
 
-        <Button className="h-12 rounded-lg px-8 text-sm font-semibold">
-          <Sparkles className="size-4" />
-          Generate
-        </Button>
-      </div>
-    </Card>
+        {/* Body: prompts (left) + reference-card uploader (right) */}
+        <div className="flex gap-5">
+          <div className="flex flex-1 flex-col gap-4">
+            <div className="flex flex-col gap-2">
+              <FieldLabel>Script</FieldLabel>
+              <Textarea
+                value={script}
+                onChange={(event) => setScript(event.target.value)}
+                className="min-h-20 resize-none bg-card"
+              />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <FieldLabel>Visual Guide</FieldLabel>
+                <SoundToggle />
+              </div>
+              <Textarea
+                value={visualGuide}
+                onChange={(event) => setVisualGuide(event.target.value)}
+                className="min-h-20 resize-none bg-card"
+              />
+            </div>
+          </div>
+
+          {/* Start / End reference card upload */}
+          <button
+            type="button"
+            className="flex w-52 shrink-0 flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border text-center transition-colors hover:bg-muted"
+          >
+            <Upload className="size-5 text-muted-foreground" />
+            <span className="text-sm text-muted-foreground">
+              + Upload {cardSide === "start" ? "Start" : "End"} Card
+            </span>
+          </button>
+        </div>
+
+        {/* Footer: product images + generate */}
+        <div className="flex items-end justify-between gap-4">
+          <div className="flex flex-col gap-2">
+            <FieldLabel>Product Images</FieldLabel>
+            <ProductImageUploader
+              images={productImages}
+              onChange={setProductImages}
+            />
+          </div>
+
+          <Button
+            onClick={handleGenerate}
+            disabled={isGenerating}
+            className="h-12 rounded-lg px-8 text-sm font-semibold"
+          >
+            {isGenerating ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Sparkles className="size-4" />
+            )}
+            {isGenerating ? "Generating…" : "Generate"}
+          </Button>
+        </div>
+      </Card>
+
+      {/* Live generation feedback + 9:16 video preview below the editor card */}
+      {status !== "idle" && (
+        <Card className="gap-4 rounded-xl p-5">
+          <div className="flex items-center gap-2">
+            {isGenerating && (
+              <Loader2 className="size-4 animate-spin text-primary" />
+            )}
+            <span className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+              {STATUS_LABEL[status]}
+            </span>
+          </div>
+
+          {logs.length > 0 && (
+            <div className="max-h-40 overflow-y-auto rounded-lg border border-border bg-muted p-3 font-mono text-xs leading-relaxed text-muted-foreground">
+              {logs.map((log, index) => (
+                <p key={`${log.timestamp}-${index}`}>{log.message}</p>
+              ))}
+            </div>
+          )}
+
+          {error && <p className="text-sm text-destructive">{error}</p>}
+
+          {videoUrl && (
+            <video
+              src={videoUrl}
+              controls
+              autoPlay
+              loop
+              className="aspect-portrait w-full max-w-xs rounded-lg border border-border bg-foreground object-contain"
+            />
+          )}
+        </Card>
+      )}
+    </div>
   );
 }
