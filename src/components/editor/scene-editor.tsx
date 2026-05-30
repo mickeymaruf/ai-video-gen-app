@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { ChevronDown, Loader2, Sparkles, Upload } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { ChevronDown, Loader2, Sparkles, Upload, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -14,29 +15,20 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { ProductImageUploader } from "@/components/editor/product-image-uploader";
 import {
+  failScene,
   pollVideoGeneration,
   submitVideoGeneration,
 } from "@/server/generation/actions";
-import type { GenerationLog } from "@/types/generation";
+import type { GenerationLog, GenStatus } from "@/types/generation";
+import type { SceneData } from "@/types/project";
 import { cn } from "@/lib/utils";
 
-const SCRIPT_TEXT =
-  "A cinematic aerial shot panning over a neon-drenched futuristic city at midnight. Rain glistens on metallic surfaces.";
-
-type GenStatus =
-  | "idle"
-  | "submitting"
-  | "IN_QUEUE"
-  | "IN_PROGRESS"
-  | "COMPLETED"
-  | "error";
-
-const STATUS_LABEL: Record<Exclude<GenStatus, "idle">, string> = {
-  submitting: "Uploading & submitting…",
+const STATUS_LABEL: Record<Exclude<GenStatus, "IDLE">, string> = {
+  SUBMITTING: "Uploading & submitting…",
   IN_QUEUE: "Queued…",
   IN_PROGRESS: "Generating…",
   COMPLETED: "Generation complete",
-  error: "Generation failed",
+  ERROR: "Generation failed",
 };
 
 const POLL_INTERVAL = 1500;
@@ -142,35 +134,78 @@ function SoundToggle() {
 /**
  * Main scene configuration canvas.
  *
- * Mirrors the active-scene editor: script + visual guidance prompts, a
- * start/end reference card uploader, product image references, and the
- * primary Generate action. The blue ring marks the selected scene.
+ * Controlled from the persisted `scene`: script + visual guidance prompts, the
+ * product image reference, and the primary Generate action. Re-mounts per scene
+ * (keyed by id), resumes polling for jobs still running after a refresh, and
+ * forks a new scene when re-generating one that already produced a video.
  */
-export function SceneEditor() {
+export function SceneEditor({
+  projectId,
+  scene,
+  index,
+}: {
+  projectId: string;
+  scene: SceneData;
+  index: number;
+}) {
+  const router = useRouter();
   const [cardSide, setCardSide] = useState<"start" | "end">("start");
   const [productImages, setProductImages] = useState<File[]>([]);
-  const [script, setScript] = useState(SCRIPT_TEXT);
-  const [visualGuide, setVisualGuide] = useState(SCRIPT_TEXT);
-  const [status, setStatus] = useState<GenStatus>("idle");
+  const [existingImage, setExistingImage] = useState<string | null>(scene.imageUrl);
+  const [script, setScript] = useState(scene.script);
+  const [visualGuide, setVisualGuide] = useState(scene.visualGuide);
+  const [status, setStatus] = useState<GenStatus>(scene.status);
   const [logs, setLogs] = useState<GenerationLog[]>([]);
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [videoUrl, setVideoUrl] = useState<string | null>(scene.videoUrl);
+  const [error, setError] = useState<string | null>(scene.error);
 
   const isGenerating =
-    status === "submitting" ||
-    status === "IN_QUEUE" ||
-    status === "IN_PROGRESS";
+    status === "SUBMITTING" || status === "IN_QUEUE" || status === "IN_PROGRESS";
 
-  // Submit to the Fal.ai queue, then poll for live status/logs until the 9:16
-  // video is ready — kept off the render thread so the UI never blocks.
+  // Poll for live status/logs until the 9:16 video is ready; persist failures.
+  async function runPoll(requestId: string) {
+    try {
+      for (;;) {
+        const result = await pollVideoGeneration(scene.id, requestId);
+        setLogs(result.logs);
+        setStatus(result.status);
+        if (result.status === "COMPLETED") {
+          setVideoUrl(result.videoUrl);
+          router.refresh();
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL));
+      }
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : "Generation failed.";
+      setStatus("ERROR");
+      setError(message);
+      await failScene(scene.id, message);
+      router.refresh();
+    }
+  }
+
+  // Resume a job left running when the page was refreshed (status from the DB).
+  const resumed = useRef(false);
+  useEffect(() => {
+    if (resumed.current) return;
+    resumed.current = true;
+    if ((status === "IN_QUEUE" || status === "IN_PROGRESS") && scene.requestId) {
+      // setState fires only in runPoll's async callbacks (after await), not synchronously.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      void runPoll(scene.requestId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function handleGenerate() {
-    if (productImages.length === 0) {
-      setStatus("error");
+    if (productImages.length === 0 && !existingImage) {
+      setStatus("ERROR");
       setError("Add at least one product image before generating.");
       return;
     }
 
-    setStatus("submitting");
+    setStatus("SUBMITTING");
     setError(null);
     setVideoUrl(null);
     setLogs([]);
@@ -179,22 +214,17 @@ export function SceneEditor() {
       const formData = new FormData();
       formData.set("script", script);
       formData.set("visualGuide", visualGuide);
-      formData.set("image", productImages[0]);
+      if (productImages[0]) formData.set("image", productImages[0]);
+      else if (existingImage) formData.set("imageUrl", existingImage);
 
-      const requestId = await submitVideoGeneration(formData);
-
-      for (;;) {
-        const result = await pollVideoGeneration(requestId);
-        setLogs(result.logs);
-        setStatus(result.status);
-        if (result.status === "COMPLETED") {
-          setVideoUrl(result.videoUrl);
-          break;
-        }
-        await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL));
+      const { sceneId, requestId } = await submitVideoGeneration(scene.id, formData);
+      if (sceneId !== scene.id) {
+        router.push(`/editor/${projectId}?scene=${sceneId}`);
+        return;
       }
+      await runPoll(requestId);
     } catch (cause) {
-      setStatus("error");
+      setStatus("ERROR");
       setError(cause instanceof Error ? cause.message : "Generation failed.");
     }
   }
@@ -205,7 +235,7 @@ export function SceneEditor() {
         {/* Header row: scene meta + reference-card tabs */}
         <div className="flex flex-wrap items-center gap-3">
           <span className="text-xs font-bold tracking-wide text-foreground uppercase">
-            Scene #1
+            Scene #{index + 1}
           </span>
           <MetaSelect
             label="Type"
@@ -278,10 +308,27 @@ export function SceneEditor() {
         <div className="flex items-end justify-between gap-4">
           <div className="flex flex-col gap-2">
             <FieldLabel>Product Images</FieldLabel>
-            <ProductImageUploader
-              images={productImages}
-              onChange={setProductImages}
-            />
+            <div className="flex items-center gap-2">
+              {existingImage && (
+                <div className="group relative size-16 overflow-hidden rounded-lg bg-foreground">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- persisted fal.media URL, not a next/image asset */}
+                  <img
+                    src={existingImage}
+                    alt="Product reference"
+                    className="size-full object-cover"
+                  />
+                  <button
+                    type="button"
+                    aria-label="Remove image"
+                    onClick={() => setExistingImage(null)}
+                    className="absolute top-1 right-1 flex size-4 items-center justify-center rounded-full bg-destructive text-primary-foreground opacity-0 transition-opacity group-hover:opacity-100"
+                  >
+                    <X className="size-2.5" />
+                  </button>
+                </div>
+              )}
+              <ProductImageUploader images={productImages} onChange={setProductImages} />
+            </div>
           </div>
 
           <Button
@@ -300,7 +347,7 @@ export function SceneEditor() {
       </Card>
 
       {/* Live generation feedback + 9:16 video preview below the editor card */}
-      {status !== "idle" && (
+      {status !== "IDLE" && (
         <Card className="gap-4 rounded-xl p-5">
           <div className="flex items-center gap-2">
             {isGenerating && (

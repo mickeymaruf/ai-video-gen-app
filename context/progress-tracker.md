@@ -9,10 +9,10 @@ change.
 
 ## Current Goal
 
-- Fal.ai image-to-video generation (`04-fal-ai-integration.md`) wired into the
-  Scene Editor via server actions with queued polling, live logs, and a 9:16
-  video preview. Next: wire real project/scene data and persistence, then the
-  dialog pattern / preview drawer.
+- Projects/scenes persisted in Postgres and driving the editor: create projects
+  and scenes, navigate via `/editor/[projectId]?scene=`, and resume Fal.ai jobs
+  after a refresh from the stored per-scene status. Next: multi-image support,
+  project/scene management (rename/delete/reorder), and export.
 
 ## Completed
 
@@ -106,19 +106,38 @@ change.
     throwaway smoke test (create Project + nested Scene, read back via relation,
     `status` defaults to `IDLE`, cascade delete) — since removed.
 
+- `05-projects-database.md` (app wiring) — projects/scenes persisted and driving
+  the editor. Generator output moved to `../generated/prisma`
+  (import in `src/lib/prisma.ts`); editor `GenStatus` union converged on the
+  uppercase DB enum (`src/types/generation.ts`). Tasks:
+  - [x] `src/server/projects/actions.ts` — `createProject` (seeds one empty
+    scene) and `createScene`; both `revalidatePath` then the client navigates.
+  - [x] `src/server/generation/actions.ts` rewritten to be scene-aware:
+    `submitVideoGeneration(sceneId, formData)` persists inputs + `requestId` +
+    `IN_QUEUE` (reusing `imageUrl` when no new file is sent), and **forks a new
+    scene** instead of overwriting one that already ran;
+    `pollVideoGeneration(sceneId, requestId)` persists each status transition and
+    the final `videoUrl`; `failScene` records errors. Logs stay transient.
+  - [x] Routes: `/editor/[projectId]/page.tsx` (RSC: loads projects + active
+    project's scenes, active scene from `?scene=`) and `/editor/page.tsx`
+    (`force-dynamic`; redirects to latest project or shows the empty state).
+  - [x] `editor-sidebar.tsx` data-driven (projects + scene tree as `Link`s, New
+    Project / Add Scene via actions, per-scene status indicator);
+    `editor-navbar.tsx` takes a `title`; `scene-editor.tsx` controlled from the
+    persisted scene, keyed by id, resumes polling on mount when a job is still
+    running, and shows the persisted `imageUrl`.
+  - [x] `Type` / `Language` / `Model` left as static UI (not persisted) per
+    request. `tsc --noEmit`, `eslint`, and `next build` all clean; verified at
+    runtime (`/editor` 200/307 redirect, unknown id 404, project page renders).
+
 ## In Progress
 
 - None.
 
 ## Next Up
 
-- Wire persistence into the app (the next step after this schema layer):
-  create-project action, `/editor/[id]` dynamic route + URL update on create,
-  read/write Scene rows from the editor, and resume-on-refresh polling via the
-  stored `requestId`. Also converge the editor's lowercase `GenStatus` union
-  with the uppercase DB enum.
-- Wire real project/scene data into the sidebar/editor; multi-image handling
-  (currently only the first product image is sent to the model).
+- Multi-image handling (model stores a single `imageUrl`; only the first product
+  image is sent). Project rename/delete + scene delete/reorder. Export.
 
 ## Open Questions
 

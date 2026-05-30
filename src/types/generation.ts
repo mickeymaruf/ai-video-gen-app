@@ -2,6 +2,15 @@
 
 export type QueueState = "IN_QUEUE" | "IN_PROGRESS" | "COMPLETED";
 
+/** Persisted scene status — mirrors the `GenStatus` enum in the Prisma schema. */
+export type GenStatus =
+  | "IDLE"
+  | "SUBMITTING"
+  | "IN_QUEUE"
+  | "IN_PROGRESS"
+  | "COMPLETED"
+  | "ERROR";
+
 export interface GenerationLog {
   message: string;
   timestamp: string;

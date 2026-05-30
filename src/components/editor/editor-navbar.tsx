@@ -19,7 +19,7 @@ import {
  * The remaining section holds the project title, billing + connection
  * status, and the primary Export action.
  */
-export function EditorNavbar() {
+export function EditorNavbar({ title }: { title: string }) {
   return (
     <header className="flex h-16 shrink-0 items-center border-b bg-card">
       {/* Brand switcher cell — width-matched to the sidebar */}
@@ -43,7 +43,7 @@ export function EditorNavbar() {
 
       {/* Project info + global actions */}
       <div className="flex flex-1 items-center gap-4 px-6">
-        <h1 className="text-base font-bold text-foreground">Project #1</h1>
+        <h1 className="text-base font-bold text-foreground">{title}</h1>
         <span className="text-sm text-muted-foreground">$1.59</span>
 
         {/* Connection status */}
