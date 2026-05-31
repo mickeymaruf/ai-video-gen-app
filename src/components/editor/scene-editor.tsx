@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, Loader2, Sparkles, Upload, X } from "lucide-react";
+import { ChevronDown, Loader2, RefreshCw, Sparkles, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
 import { ProductImageUploader } from "@/components/editor/product-image-uploader";
+import { CardImageUploader } from "@/components/editor/card-image-uploader";
 import {
   pollVideoGeneration,
   submitVideoGeneration,
@@ -64,36 +65,7 @@ function MetaSelect({
   );
 }
 
-/** Small segmented control toggling the start / end reference card. */
-function CardSideTabs({
-  value,
-  onChange,
-}: {
-  value: "start" | "end";
-  onChange: (value: "start" | "end") => void;
-}) {
-  return (
-    <div className="inline-flex items-center gap-1 rounded-lg border border-border bg-muted p-1">
-      {(["start", "end"] as const).map((side) => (
-        <button
-          key={side}
-          type="button"
-          onClick={() => onChange(side)}
-          className={cn(
-            "rounded-md px-3 py-1 text-xs font-semibold tracking-wide uppercase transition-colors",
-            value === side
-              ? "bg-card text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground",
-          )}
-        >
-          {side} Card
-        </button>
-      ))}
-    </div>
-  );
-}
-
-/** Section label shared by the SCRIPT / VISUAL GUIDE / PRODUCT IMAGES blocks. */
+/** Section label shared by the SCRIPT / VISUAL GUIDE / PRODUCT IMAGES / card blocks. */
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
     <span className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
@@ -148,9 +120,12 @@ export function SceneEditor({
   index: number;
 }) {
   const router = useRouter();
-  const [cardSide, setCardSide] = useState<"start" | "end">("start");
   const [productImages, setProductImages] = useState<File[]>([]);
-  const [existingImage, setExistingImage] = useState<string | null>(scene.imageUrl);
+  const [existingImage, setExistingImage] = useState<string | null>(
+    scene.imageUrl,
+  );
+  const [startCard, setStartCard] = useState<File | null>(null);
+  const [endCard, setEndCard] = useState<File | null>(null);
   const [script, setScript] = useState(scene.script);
   const [visualGuide, setVisualGuide] = useState(scene.visualGuide);
   const [status, setStatus] = useState<GenStatus>(scene.status);
@@ -160,7 +135,9 @@ export function SceneEditor({
   const [notice, setNotice] = useState<string | null>(null);
 
   const isGenerating =
-    status === "SUBMITTING" || status === "IN_QUEUE" || status === "IN_PROGRESS";
+    status === "SUBMITTING" ||
+    status === "IN_QUEUE" ||
+    status === "IN_PROGRESS";
 
   // Poll for live status/logs until the 9:16 video is ready. Transient errors
   // are NOT terminal: the webhook (and resume-on-mount) reconcile the real result,
@@ -179,7 +156,9 @@ export function SceneEditor({
         await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL));
       }
     } catch {
-      setNotice("Connection lost — generation continues in the background. Refresh to check.");
+      setNotice(
+        "Connection lost — generation continues in the background. Refresh to check.",
+      );
     }
   }
 
@@ -188,7 +167,10 @@ export function SceneEditor({
   useEffect(() => {
     if (resumed.current) return;
     resumed.current = true;
-    if ((status === "IN_QUEUE" || status === "IN_PROGRESS") && scene.requestId) {
+    if (
+      (status === "IN_QUEUE" || status === "IN_PROGRESS") &&
+      scene.requestId
+    ) {
       // setState fires only in runPoll's async callbacks (after await), not synchronously.
       // eslint-disable-next-line react-hooks/set-state-in-effect
       void runPoll(scene.requestId);
@@ -216,7 +198,10 @@ export function SceneEditor({
       if (productImages[0]) formData.set("image", productImages[0]);
       else if (existingImage) formData.set("imageUrl", existingImage);
 
-      const { sceneId, requestId } = await submitVideoGeneration(scene.id, formData);
+      const { sceneId, requestId } = await submitVideoGeneration(
+        scene.id,
+        formData,
+      );
       if (sceneId !== scene.id) {
         router.push(`/editor/${projectId}?scene=${sceneId}`);
         return;
@@ -229,82 +214,59 @@ export function SceneEditor({
   }
 
   return (
-    <div className="flex flex-col gap-5">
-      <Card className="gap-5 rounded-xl p-5 ring-2 ring-primary">
-        {/* Header row: scene meta + reference-card tabs */}
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="text-xs font-bold tracking-wide text-foreground uppercase">
-            Scene #{index + 1}
-          </span>
-          <MetaSelect
-            label="Type"
-            value="Cinematic"
-            options={["Cinematic", "UGC", "Product", "Lifestyle"]}
-          />
-          <MetaSelect
-            label="Language"
-            value="Spanish (Argentina)"
-            options={[
-              "Spanish (Argentina)",
-              "Spanish (Spain)",
-              "English (US)",
-              "Portuguese (Brazil)",
-            ]}
-          />
-          <MetaSelect
-            label="Model"
-            value="Google Veo 3"
-            options={[
-              "Google Veo 3",
-              "Kling 1.6",
-              "Luma Ray 2",
-              "Runway Gen-3",
-            ]}
-          />
-          <div className="ml-auto">
-            <CardSideTabs value={cardSide} onChange={setCardSide} />
-          </div>
-        </div>
+    <Card className="gap-5 rounded-xl p-5 ring-2 ring-primary">
+      {/* Header row: scene label + meta dropdowns */}
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="text-xs font-bold tracking-wide text-foreground uppercase">
+          Scene #{index + 1}
+        </span>
+        <MetaSelect
+          label="Type"
+          value="Cinematic"
+          options={["Cinematic", "UGC", "Product", "Lifestyle"]}
+        />
+        <MetaSelect
+          label="Language"
+          value="Spanish (Argentina)"
+          options={[
+            "Spanish (Argentina)",
+            "Spanish (Spain)",
+            "English (US)",
+            "Portuguese (Brazil)",
+          ]}
+        />
+        <MetaSelect
+          label="Model"
+          value="Google Veo 3"
+          options={["Google Veo 3", "Kling 1.6", "Luma Ray 2", "Runway Gen-3"]}
+        />
+      </div>
 
-        {/* Body: prompts (left) + reference-card uploader (right) */}
-        <div className="flex gap-5">
-          <div className="flex flex-1 flex-col gap-4">
-            <div className="flex flex-col gap-2">
-              <FieldLabel>Script</FieldLabel>
-              <Textarea
-                value={script}
-                onChange={(event) => setScript(event.target.value)}
-                className="min-h-20 resize-none bg-card"
-              />
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <FieldLabel>Visual Guide</FieldLabel>
-                <SoundToggle />
-              </div>
-              <Textarea
-                value={visualGuide}
-                onChange={(event) => setVisualGuide(event.target.value)}
-                className="min-h-20 resize-none bg-card"
-              />
-            </div>
+      {/* Body: left content column + right 9:16 video panel */}
+      <div className="flex gap-5">
+        {/* Left: script, visual guide, product images, start/end cards */}
+        <div className="flex flex-1 flex-col gap-4">
+          <div className="flex flex-col gap-2">
+            <FieldLabel>Script</FieldLabel>
+            <Textarea
+              value={script}
+              onChange={(event) => setScript(event.target.value)}
+              className="min-h-20 resize-none bg-card"
+            />
           </div>
 
-          {/* Start / End reference card upload */}
-          <button
-            type="button"
-            className="flex w-52 shrink-0 flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border text-center transition-colors hover:bg-muted"
-          >
-            <Upload className="size-5 text-muted-foreground" />
-            <span className="text-sm text-muted-foreground">
-              + Upload {cardSide === "start" ? "Start" : "End"} Card
-            </span>
-          </button>
-        </div>
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <FieldLabel>Visual Guide</FieldLabel>
+              <SoundToggle />
+            </div>
+            <Textarea
+              value={visualGuide}
+              onChange={(event) => setVisualGuide(event.target.value)}
+              className="min-h-20 resize-none bg-card"
+            />
+          </div>
 
-        {/* Footer: product images + generate */}
-        <div className="flex items-end justify-between gap-4">
           <div className="flex flex-col gap-2">
             <FieldLabel>Product Images</FieldLabel>
             <div className="flex items-center gap-2">
@@ -326,14 +288,62 @@ export function SceneEditor({
                   </button>
                 </div>
               )}
-              <ProductImageUploader images={productImages} onChange={setProductImages} />
+              <ProductImageUploader
+                images={productImages}
+                onChange={setProductImages}
+              />
             </div>
           </div>
+
+          {/* Start Card + End Card side by side */}
+          <div className="w-3/4 flex gap-3">
+            <div className="flex flex-1 flex-col gap-1.5">
+              <FieldLabel>Start Card</FieldLabel>
+              <CardImageUploader
+                image={startCard}
+                onChange={setStartCard}
+                label="Start Card"
+              />
+            </div>
+            <div className="flex flex-1 flex-col gap-1.5">
+              <FieldLabel>End Card</FieldLabel>
+              <CardImageUploader
+                image={endCard}
+                onChange={setEndCard}
+                label="End Card"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Right: 9:16 video preview + generation controls */}
+        <div className="flex w-64 shrink-0 flex-col gap-3">
+          <div className="relative flex aspect-portrait w-full overflow-hidden rounded-lg border border-border bg-muted">
+            {videoUrl ? (
+              <video
+                src={videoUrl}
+                controls
+                autoPlay
+                loop
+                className="size-full object-contain bg-foreground"
+              />
+            ) : isGenerating ? (
+              <div className="flex size-full flex-col items-center justify-center gap-2 text-muted-foreground">
+                <Loader2 className="size-6 animate-spin text-primary" />
+                <span className="text-xs text-center px-2">
+                  {STATUS_LABEL[status]}
+                </span>
+              </div>
+            ) : null}
+          </div>
+
+          {error && <p className="text-xs text-destructive">{error}</p>}
+          {notice && <p className="text-xs text-muted-foreground">{notice}</p>}
 
           <Button
             onClick={handleGenerate}
             disabled={isGenerating}
-            className="h-12 rounded-lg px-8 text-sm font-semibold"
+            className="h-10 w-full rounded-lg text-sm font-semibold"
           >
             {isGenerating ? (
               <Loader2 className="size-4 animate-spin" />
@@ -342,44 +352,18 @@ export function SceneEditor({
             )}
             {isGenerating ? "Generating…" : "Generate"}
           </Button>
+
+          {videoUrl && !isGenerating && (
+            <Button
+              onClick={handleGenerate}
+              className="h-10 w-full rounded-lg text-sm font-semibold"
+            >
+              <RefreshCw className="size-4" />
+              Regenerate
+            </Button>
+          )}
         </div>
-      </Card>
-
-      {/* Live generation feedback + 9:16 video preview below the editor card */}
-      {status !== "IDLE" && (
-        <Card className="gap-4 rounded-xl p-5">
-          <div className="flex items-center gap-2">
-            {isGenerating && (
-              <Loader2 className="size-4 animate-spin text-primary" />
-            )}
-            <span className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-              {STATUS_LABEL[status]}
-            </span>
-          </div>
-
-          {logs.length > 0 && (
-            <div className="max-h-40 overflow-y-auto rounded-lg border border-border bg-muted p-3 font-mono text-xs leading-relaxed text-muted-foreground">
-              {logs.map((log, index) => (
-                <p key={`${log.timestamp}-${index}`}>{log.message}</p>
-              ))}
-            </div>
-          )}
-
-          {error && <p className="text-sm text-destructive">{error}</p>}
-
-          {notice && <p className="text-sm text-muted-foreground">{notice}</p>}
-
-          {videoUrl && (
-            <video
-              src={videoUrl}
-              controls
-              autoPlay
-              loop
-              className="aspect-portrait w-full max-w-xs rounded-lg border border-border bg-foreground object-contain"
-            />
-          )}
-        </Card>
-      )}
-    </div>
+      </div>
+    </Card>
   );
 }

@@ -161,6 +161,25 @@ change.
 
 ## Completed (continued)
 
+- `09-refine-scene-editor-layout.md` — scene editor layout refactored to match
+  the reference screenshot. Tasks:
+  - [x] Removed the `CardSideTabs` (start/end card tab switcher) from the header
+    row and the toggled single-slot uploader from the right side of the prompts
+    area.
+  - [x] Created `src/components/editor/card-image-uploader.tsx` — single-image
+    drag-and-drop uploader (modelled on `ProductImageUploader`) for start/end
+    reference cards; accepts `image: File | null`, `onChange`, and `label`; uses
+    `react-dropzone` (`multiple: false`), revokes the preview object URL on
+    unmount; not wired into the generation model yet.
+  - [x] Left column (`flex-1`) now stacks: Script → Visual Guide + Sound toggle
+    → Product Images → Start Card | End Card (side-by-side, each `flex-1 h-24`).
+  - [x] Right column (`w-52`, `aspect-portrait`) replaces the separate generation
+    feedback Card: shows a 9:16 placeholder while idle, spinner + status text
+    while generating, and the finished `<video>` when complete. Error/notice text
+    appears below the video area; Generate button always visible; Regenerate
+    button appears only when a `videoUrl` is set.
+  - [x] `tsc --noEmit` and `eslint` clean for all new/changed files.
+
 - `08-refine-project-creation.md` — project creation/settings modal. The Stitch
   screen (project `15708072907553766876`, screen
   `6d1c1207cca849aca4cac318f513b172`) was not retrievable (no Stitch tool/public
