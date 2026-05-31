@@ -23,7 +23,7 @@ export interface PollResult {
   videoUrl: string | null;
 }
 
-/** Result payload shape for `fal-ai/minimax-video/image-to-video`. */
-export interface MinimaxVideoOutput {
+/** Result payload shape shared by the supported image-to-video models. */
+export interface VideoOutput {
   video: { url: string };
 }

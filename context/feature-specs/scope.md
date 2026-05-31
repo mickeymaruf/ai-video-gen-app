@@ -1,0 +1,3 @@
+- For aspect ratio, We have aspect ratio saved in db under model Project > aspectRatio. Which will define the ratio of the video output
+- change layout of editor so loader stays in right section
+- optimize the polling with fal mcp

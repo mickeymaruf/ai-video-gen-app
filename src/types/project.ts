@@ -28,6 +28,22 @@ export interface SceneSummary {
   status: GenStatus;
 }
 
+/** Creative styles offered in the scene's Type dropdown (injected into the prompt). */
+export const TYPE_OPTIONS: string[] = [
+  "UGC",
+  "Cinematic",
+  "Product",
+  "Lifestyle",
+];
+
+/** Spoken languages offered in the scene's Language dropdown (injected into the prompt). */
+export const LANGUAGE_OPTIONS: string[] = [
+  "English (US)",
+  "Spanish (Spain)",
+  "Spanish (Argentina)",
+  "Portuguese (Brazil)",
+];
+
 /** The editor's view of a single scene — serializable, no Prisma Date fields. */
 export interface SceneData {
   id: string;
@@ -38,4 +54,11 @@ export interface SceneData {
   status: GenStatus;
   videoUrl: string | null;
   error: string | null;
+  // generation config
+  type: string;
+  language: string;
+  model: string;
+  sound: boolean;
+  startImageUrl: string | null;
+  endImageUrl: string | null;
 }

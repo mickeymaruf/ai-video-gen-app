@@ -2,13 +2,44 @@
 
 import { revalidatePath } from "next/cache";
 
-import { fal, VIDEO_MODEL } from "@/lib/fal";
+import { fal } from "@/lib/fal";
 import { prisma } from "@/lib/prisma";
-import type { MinimaxVideoOutput, PollResult } from "@/types/generation";
+import { buildModelInput, getVideoModel } from "@/lib/video-models";
+import type { VideoOutput, PollResult } from "@/types/generation";
+import type { AspectRatio } from "@/types/project";
 
 function field(formData: FormData, key: string): string {
   const value = formData.get(key);
   return typeof value === "string" ? value.trim() : "";
+}
+
+/** Compose the model prompt from the creative style, spoken language, and the two prompts. */
+function buildPrompt(input: {
+  type: string;
+  language: string;
+  script: string;
+  visualGuide: string;
+}): string {
+  const directives = [
+    input.type && `Style: ${input.type}`,
+    input.language && `Spoken language: ${input.language}`,
+  ]
+    .filter(Boolean)
+    .join(". ");
+  const body = [input.script, input.visualGuide].filter(Boolean).join("\n\n");
+  return [directives, body].filter(Boolean).join("\n\n");
+}
+
+/** Upload a freshly selected file, otherwise reuse an explicit/persisted URL. */
+async function resolveImageUrl(
+  file: FormDataEntryValue | null,
+  explicit: string,
+  persisted: string | null,
+): Promise<string | null> {
+  if (file instanceof File && file.size > 0) {
+    return fal.storage.upload(file);
+  }
+  return explicit || persisted;
 }
 
 /**
@@ -20,33 +51,67 @@ export async function submitVideoGeneration(
   sceneId: string,
   formData: FormData,
 ): Promise<{ sceneId: string; requestId: string }> {
-  const scene = await prisma.scene.findUniqueOrThrow({ where: { id: sceneId } });
+  const scene = await prisma.scene.findUniqueOrThrow({
+    where: { id: sceneId },
+    include: { project: true },
+  });
 
   const script = field(formData, "script");
   const visualGuide = field(formData, "visualGuide");
+  const type = field(formData, "type") || scene.type;
+  const language = field(formData, "language") || scene.language;
+  const sound = field(formData, "sound") !== "false";
+  const model = getVideoModel(field(formData, "model") || scene.model);
 
-  const image = formData.get("image");
-  let imageUrl = field(formData, "imageUrl") || scene.imageUrl;
-  if (image instanceof File && image.size > 0) {
-    imageUrl = await fal.storage.upload(image);
-  }
-  if (!imageUrl) {
-    throw new Error("A product image is required to generate a video.");
+  // Product image and the optional start/end reference cards.
+  const imageUrl = await resolveImageUrl(
+    formData.get("image"),
+    field(formData, "imageUrl"),
+    scene.imageUrl,
+  );
+  const startImageUrl = await resolveImageUrl(
+    formData.get("startCard"),
+    field(formData, "startImageUrl"),
+    scene.startImageUrl,
+  );
+  const endImageUrl = model.endImageParam
+    ? await resolveImageUrl(
+        formData.get("endCard"),
+        field(formData, "endImageUrl"),
+        scene.endImageUrl,
+      )
+    : null;
+
+  // The start frame drives the model: an explicit start card wins, else the product image.
+  const startFrame = startImageUrl ?? imageUrl;
+  if (!startFrame) {
+    throw new Error("A product image or start card is required to generate a video.");
   }
 
-  const prompt = [script, visualGuide].filter(Boolean).join("\n\n");
   const webhookUrl = process.env.APP_URL
     ? `${process.env.APP_URL}/api/fal/webhook`
     : undefined;
-  const { request_id } = await fal.queue.submit(VIDEO_MODEL, {
-    input: { prompt, image_url: imageUrl, prompt_optimizer: true },
+  const { request_id } = await fal.queue.submit(model.id, {
+    input: buildModelInput(model, {
+      prompt: buildPrompt({ type, language, script, visualGuide }),
+      startImageUrl: startFrame,
+      endImageUrl,
+      sound,
+      aspectRatio: scene.project.aspectRatio as AspectRatio,
+    }),
     webhookUrl,
   });
 
   const data = {
     script,
     visualGuide,
+    type,
+    language,
+    model: model.id,
+    sound,
     imageUrl,
+    startImageUrl,
+    endImageUrl,
     requestId: request_id,
     status: "IN_QUEUE" as const,
     videoUrl: null,
@@ -73,8 +138,14 @@ export async function submitVideoGeneration(
 export async function pollVideoGeneration(
   sceneId: string,
   requestId: string,
+  model: string,
 ): Promise<PollResult> {
-  const status = await fal.queue.status(VIDEO_MODEL, { requestId, logs: true });
+  // The model endpoint is passed in (the client already holds it) so this
+  // hot loop — called every poll interval — never reads the DB just to recover
+  // it. getVideoModel guards against an unknown id by falling back to default.
+  const modelId = getVideoModel(model).id;
+
+  const status = await fal.queue.status(modelId, { requestId, logs: true });
   const logs = ("logs" in status ? status.logs : []).map(({ message, timestamp }) => ({
     message,
     timestamp,
@@ -85,8 +156,8 @@ export async function pollVideoGeneration(
     return { status: status.status, logs, videoUrl: null };
   }
 
-  const result = await fal.queue.result(VIDEO_MODEL, { requestId });
-  const output = result.data as MinimaxVideoOutput;
+  const result = await fal.queue.result(modelId, { requestId });
+  const output = result.data as VideoOutput;
   const videoUrl = output.video?.url ?? null;
   await prisma.scene.update({
     where: { id: sceneId },

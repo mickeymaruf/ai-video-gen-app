@@ -161,6 +161,40 @@ change.
 
 ## Completed (continued)
 
+- `10-model-config.md` — Type / Language / Model are now real, and Sound +
+  Start/End cards feed generation per the selected model's capabilities. Tasks:
+  - [x] `src/lib/video-models.ts` — curated registry of top fal.ai image-to-video
+    models (MiniMax Video [default], Google Veo 3.1, Kling 2.6 Pro, Seedance 1.5
+    Pro, MiniMax Hailuo 02). Each `VideoModel` declares its start-image param,
+    end-frame param (or `null`), audio param (or `null`), prompt-optimizer flag,
+    and accepted aspect ratios. Pure `buildModelInput()` emits only the params a
+    model actually supports (never submits an invalid field); `getVideoModel()`
+    resolves id → model with a safe default. Data + pure functions only (no fal
+    client) so client components can import it (invariant #8 preserved — the fal
+    queue calls stay in `server/generation/actions.ts`).
+  - [x] Schema: `Scene` gains `type`/`language`/`model`/`sound`/`startImageUrl`/
+    `endImageUrl` (migration `20260531045606_scene_model_config`). `SceneData`
+    extended; `TYPE_OPTIONS` / `LANGUAGE_OPTIONS` added to `src/types/project.ts`.
+    `MinimaxVideoOutput` renamed `VideoOutput` (shared output shape).
+  - [x] `scene-editor.tsx` — Type / Language / Model dropdowns and the Sound
+    toggle are controlled + persisted (keyed per scene, resume-safe). The Sound
+    toggle renders only when the model has an audio param; the End Card uploader
+    only when the model has an end-frame param. Start/End card files (or persisted
+    URLs) are sent on generate; `CardImageUploader` now also renders a persisted
+    `existingUrl`. Start-frame validation accepts a product image *or* a start card.
+  - [x] `submitVideoGeneration` builds the fal input from the selected model:
+    start frame = start card ?? product image, optional end frame, audio = Sound,
+    aspect ratio from the project (only when accepted), and a prompt composed from
+    Type (style) + Language + Script + Visual Guide. Persists all config; forks
+    carry it. `pollVideoGeneration` takes the model endpoint as an argument — the
+    client (which already holds it) passes it, so the hot 1.5s poll loop no longer
+    issues a per-cycle DB read just to recover the model id. The id is captured by
+    value into `runPoll` (resume → `scene.model`, post-submit → `modelId`) so a
+    mid-run Model-dropdown change can't redirect the poll; `getVideoModel()` guards
+    unknown ids. `VIDEO_MODEL` const removed from `src/lib/fal.ts`.
+  - [x] `tsc --noEmit`, `eslint` (no new findings; one pre-existing unused-`logs`
+    warning from the `09` layout refactor left untouched), and `next build` clean.
+
 - `09-refine-scene-editor-layout.md` — scene editor layout refactored to match
   the reference screenshot. Tasks:
   - [x] Removed the `CardSideTabs` (start/end card tab switcher) from the header

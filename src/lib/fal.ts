@@ -4,6 +4,5 @@ import { fal } from "@fal-ai/client";
 // read from FAL_KEY and never exposed to the client.
 fal.config({ credentials: process.env.FAL_KEY });
 
-export const VIDEO_MODEL = "fal-ai/minimax-video/image-to-video";
-
+// The catalog of selectable models lives in `src/lib/video-models.ts`.
 export { fal };

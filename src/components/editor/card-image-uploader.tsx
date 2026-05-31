@@ -10,12 +10,18 @@ interface CardImageUploaderProps {
   image: File | null;
   onChange: (image: File | null) => void;
   label: string;
+  /** Persisted image URL to show when no new file has been selected. */
+  existingUrl?: string | null;
+  /** Clear the persisted image (only used when `existingUrl` is shown). */
+  onRemoveExisting?: () => void;
 }
 
 export function CardImageUploader({
   image,
   onChange,
   label,
+  existingUrl,
+  onRemoveExisting,
 }: CardImageUploaderProps) {
   const preview = useMemo(
     () => (image ? URL.createObjectURL(image) : null),
@@ -41,15 +47,17 @@ export function CardImageUploader({
     multiple: false,
   });
 
-  if (image && preview) {
+  // A newly selected file takes precedence over the persisted image.
+  const shownUrl = image && preview ? preview : (existingUrl ?? null);
+  if (shownUrl) {
     return (
-      <div className="group relative h-36 overflow-hidden rounded-lg bg-foreground">
-        {/* eslint-disable-next-line @next/next/no-img-element -- blob preview URL, not a next/image asset */}
-        <img src={preview} alt={label} className="size-full object-cover" />
+      <div className="group relative max-w-[270px] h-36 overflow-hidden rounded-lg bg-foreground">
+        {/* eslint-disable-next-line @next/next/no-img-element -- blob or persisted fal.media URL, not a next/image asset */}
+        <img src={shownUrl} alt={label} className="size-full object-cover" />
         <button
           type="button"
           aria-label="Remove image"
-          onClick={() => onChange(null)}
+          onClick={() => (image ? onChange(null) : onRemoveExisting?.())}
           className="absolute top-1 right-1 flex size-4 items-center justify-center rounded-full bg-destructive text-primary-foreground opacity-0 transition-opacity group-hover:opacity-100"
         >
           <X className="size-2.5" />
@@ -62,7 +70,7 @@ export function CardImageUploader({
     <div
       {...getRootProps()}
       className={cn(
-        "flex h-36 cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-gray-300 border-dashed text-muted-foreground transition-colors hover:bg-muted",
+        "flex max-w-[270px] h-36 cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-gray-300 border-dashed text-muted-foreground transition-colors hover:bg-muted",
         isDragActive && "border-primary bg-primary/10 text-primary",
       )}
     >

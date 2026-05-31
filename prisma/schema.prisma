@@ -41,6 +41,14 @@ model Scene {
   visualGuide String  @default("")
   imageUrl    String? // fal.storage URL of the product image
 
+  // generation config (drives the fal model + input)
+  type          String  @default("UGC") // creative style, injected into the prompt
+  language      String  @default("English (US)") // spoken language, injected into the prompt
+  model         String  @default("fal-ai/minimax-video/image-to-video") // fal endpoint id
+  sound         Boolean @default(true) // native audio toggle (models that support it)
+  startImageUrl String? // start frame / start card (falls back to imageUrl)
+  endImageUrl   String? // end frame / end card (models that support it)
+
   // fal.ai job state (this is what survives refresh)
   requestId String? // fal queue request id — used to resume polling
   status    GenStatus @default(IDLE)

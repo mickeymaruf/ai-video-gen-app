@@ -66,6 +66,12 @@ export default async function ProjectEditorPage({
                 status: activeScene.status,
                 videoUrl: activeScene.videoUrl,
                 error: activeScene.error,
+                type: activeScene.type,
+                language: activeScene.language,
+                model: activeScene.model,
+                sound: activeScene.sound,
+                startImageUrl: activeScene.startImageUrl,
+                endImageUrl: activeScene.endImageUrl,
               }}
             />
           ) : (

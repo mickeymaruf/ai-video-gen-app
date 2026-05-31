@@ -19,9 +19,32 @@ import {
   pollVideoGeneration,
   submitVideoGeneration,
 } from "@/server/generation/actions";
+import { getVideoModel, VIDEO_MODELS } from "@/lib/video-models";
 import type { GenerationLog, GenStatus } from "@/types/generation";
-import type { SceneData } from "@/types/project";
+import {
+  LANGUAGE_OPTIONS,
+  TYPE_OPTIONS,
+  type SceneData,
+} from "@/types/project";
 import { cn } from "@/lib/utils";
+
+interface SelectOption {
+  value: string;
+  label: string;
+}
+
+const TYPE_SELECT_OPTIONS: SelectOption[] = TYPE_OPTIONS.map((value) => ({
+  value,
+  label: value,
+}));
+const LANGUAGE_SELECT_OPTIONS: SelectOption[] = LANGUAGE_OPTIONS.map((value) => ({
+  value,
+  label: value,
+}));
+const MODEL_SELECT_OPTIONS: SelectOption[] = VIDEO_MODELS.map((model) => ({
+  value: model.id,
+  label: model.label,
+}));
 
 const STATUS_LABEL: Record<Exclude<GenStatus, "IDLE">, string> = {
   SUBMITTING: "Uploading & submitting…",
@@ -38,12 +61,15 @@ function MetaSelect({
   label,
   value,
   options,
+  onChange,
 }: {
   label: string;
   value: string;
-  options: string[];
+  options: SelectOption[];
+  onChange: (value: string) => void;
 }) {
-  const [selected, setSelected] = useState(value);
+  const selectedLabel =
+    options.find((option) => option.value === value)?.label ?? value;
 
   return (
     <DropdownMenu>
@@ -51,13 +77,18 @@ function MetaSelect({
         <span className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
           {label}
         </span>
-        <span className="text-sm font-medium text-foreground">{selected}</span>
+        <span className="text-sm font-medium text-foreground">
+          {selectedLabel}
+        </span>
         <ChevronDown className="size-3.5 text-muted-foreground" />
       </DropdownMenuTrigger>
       <DropdownMenuContent>
         {options.map((option) => (
-          <DropdownMenuItem key={option} onClick={() => setSelected(option)}>
-            {option}
+          <DropdownMenuItem
+            key={option.value}
+            onClick={() => onChange(option.value)}
+          >
+            {option.label}
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>
@@ -75,9 +106,13 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
 }
 
 /** Pill toggle for the per-scene sound option. */
-function SoundToggle() {
-  const [on, setOn] = useState(true);
-
+function SoundToggle({
+  on,
+  onChange,
+}: {
+  on: boolean;
+  onChange: (on: boolean) => void;
+}) {
   return (
     <div className="flex items-center gap-2">
       <FieldLabel>Sound</FieldLabel>
@@ -85,7 +120,7 @@ function SoundToggle() {
         type="button"
         role="switch"
         aria-checked={on}
-        onClick={() => setOn((value) => !value)}
+        onClick={() => onChange(!on)}
         className={cn(
           "relative h-5 w-9 rounded-full transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
           on ? "bg-primary" : "bg-border",
@@ -126,8 +161,20 @@ export function SceneEditor({
   );
   const [startCard, setStartCard] = useState<File | null>(null);
   const [endCard, setEndCard] = useState<File | null>(null);
+  const [existingStartImage, setExistingStartImage] = useState<string | null>(
+    scene.startImageUrl,
+  );
+  const [existingEndImage, setExistingEndImage] = useState<string | null>(
+    scene.endImageUrl,
+  );
+  const [type, setType] = useState(scene.type);
+  const [language, setLanguage] = useState(scene.language);
+  const [modelId, setModelId] = useState(scene.model);
+  const [sound, setSound] = useState(scene.sound);
   const [script, setScript] = useState(scene.script);
   const [visualGuide, setVisualGuide] = useState(scene.visualGuide);
+
+  const model = getVideoModel(modelId);
   const [status, setStatus] = useState<GenStatus>(scene.status);
   const [logs, setLogs] = useState<GenerationLog[]>([]);
   const [videoUrl, setVideoUrl] = useState<string | null>(scene.videoUrl);
@@ -142,10 +189,10 @@ export function SceneEditor({
   // Poll for live status/logs until the 9:16 video is ready. Transient errors
   // are NOT terminal: the webhook (and resume-on-mount) reconcile the real result,
   // so we leave the scene running and only surface a soft notice.
-  async function runPoll(requestId: string) {
+  async function runPoll(requestId: string, modelToPoll: string) {
     try {
       for (;;) {
-        const result = await pollVideoGeneration(scene.id, requestId);
+        const result = await pollVideoGeneration(scene.id, requestId, modelToPoll);
         setLogs(result.logs);
         setStatus(result.status);
         if (result.status === "COMPLETED") {
@@ -173,15 +220,20 @@ export function SceneEditor({
     ) {
       // setState fires only in runPoll's async callbacks (after await), not synchronously.
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      void runPoll(scene.requestId);
+      void runPoll(scene.requestId, scene.model);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function handleGenerate() {
-    if (productImages.length === 0 && !existingImage) {
+    const hasStartFrame =
+      productImages.length > 0 ||
+      existingImage ||
+      startCard ||
+      existingStartImage;
+    if (!hasStartFrame) {
       setStatus("ERROR");
-      setError("Add at least one product image before generating.");
+      setError("Add a product image or a start card before generating.");
       return;
     }
 
@@ -195,8 +247,20 @@ export function SceneEditor({
       const formData = new FormData();
       formData.set("script", script);
       formData.set("visualGuide", visualGuide);
+      formData.set("type", type);
+      formData.set("language", language);
+      formData.set("model", modelId);
+      formData.set("sound", String(sound));
       if (productImages[0]) formData.set("image", productImages[0]);
       else if (existingImage) formData.set("imageUrl", existingImage);
+      if (startCard) formData.set("startCard", startCard);
+      else if (existingStartImage)
+        formData.set("startImageUrl", existingStartImage);
+      if (model.endImageParam) {
+        if (endCard) formData.set("endCard", endCard);
+        else if (existingEndImage)
+          formData.set("endImageUrl", existingEndImage);
+      }
 
       const { sceneId, requestId } = await submitVideoGeneration(
         scene.id,
@@ -206,7 +270,7 @@ export function SceneEditor({
         router.push(`/editor/${projectId}?scene=${sceneId}`);
         return;
       }
-      await runPoll(requestId);
+      await runPoll(requestId, modelId);
     } catch (cause) {
       setStatus("ERROR");
       setError(cause instanceof Error ? cause.message : "Generation failed.");
@@ -222,23 +286,21 @@ export function SceneEditor({
         </span>
         <MetaSelect
           label="Type"
-          value="Cinematic"
-          options={["Cinematic", "UGC", "Product", "Lifestyle"]}
+          value={type}
+          options={TYPE_SELECT_OPTIONS}
+          onChange={setType}
         />
         <MetaSelect
           label="Language"
-          value="Spanish (Argentina)"
-          options={[
-            "Spanish (Argentina)",
-            "Spanish (Spain)",
-            "English (US)",
-            "Portuguese (Brazil)",
-          ]}
+          value={language}
+          options={LANGUAGE_SELECT_OPTIONS}
+          onChange={setLanguage}
         />
         <MetaSelect
           label="Model"
-          value="Google Veo 3"
-          options={["Google Veo 3", "Kling 1.6", "Luma Ray 2", "Runway Gen-3"]}
+          value={modelId}
+          options={MODEL_SELECT_OPTIONS}
+          onChange={setModelId}
         />
       </div>
 
@@ -258,7 +320,9 @@ export function SceneEditor({
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
               <FieldLabel>Visual Guide</FieldLabel>
-              <SoundToggle />
+              {model.audioParam && (
+                <SoundToggle on={sound} onChange={setSound} />
+              )}
             </div>
             <Textarea
               value={visualGuide}
@@ -295,24 +359,30 @@ export function SceneEditor({
             </div>
           </div>
 
-          {/* Start Card + End Card side by side */}
-          <div className="w-3/4 flex gap-3">
+          {/* Start Card + End Card (end frame only when the model supports it) */}
+          <div className="flex w-3/4 gap-3">
             <div className="flex flex-1 flex-col gap-1.5">
               <FieldLabel>Start Card</FieldLabel>
               <CardImageUploader
                 image={startCard}
                 onChange={setStartCard}
                 label="Start Card"
+                existingUrl={existingStartImage}
+                onRemoveExisting={() => setExistingStartImage(null)}
               />
             </div>
-            <div className="flex flex-1 flex-col gap-1.5">
-              <FieldLabel>End Card</FieldLabel>
-              <CardImageUploader
-                image={endCard}
-                onChange={setEndCard}
-                label="End Card"
-              />
-            </div>
+            {model.endImageParam && (
+              <div className="flex flex-1 flex-col gap-1.5">
+                <FieldLabel>End Card</FieldLabel>
+                <CardImageUploader
+                  image={endCard}
+                  onChange={setEndCard}
+                  label="End Card"
+                  existingUrl={existingEndImage}
+                  onRemoveExisting={() => setExistingEndImage(null)}
+                />
+              </div>
+            )}
           </div>
         </div>
 
