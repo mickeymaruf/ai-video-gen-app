@@ -162,6 +162,42 @@ change.
 
 ## Completed (continued)
 
+- `12-scene-video-versions.md` — scene **forking replaced with per-scene video
+  versions**: regenerating keeps the same scene card and appends a new version; a
+  version switcher (above the video output, pushed all the way right of
+  Type/Language/Model) toggles between previously generated videos. Tasks:
+  - [x] Schema: new `SceneVersion` model (`id`, `sceneId` + cascade relation,
+    `videoUrl`, `createdAt`, `@@index([sceneId])`); `Scene` gains
+    `versions SceneVersion[]`. Migration `20260531101022_scene_versions` backfills
+    one version per existing completed scene (`gen_random_uuid()` id from
+    `Scene.videoUrl`), so old videos keep showing. Applied via `migrate deploy`
+    (the pooled Prisma Postgres has no shadow DB for `migrate dev`); client
+    regenerated.
+  - [x] `src/server/generation/complete.ts` — shared `completeScene(sceneId,
+    videoUrl)` marks the scene `COMPLETED` and appends a version **once**
+    (status-guarded: only appends when transitioning *into* COMPLETED, so the
+    client poll loop and the fal webhook can't double-append for one run). Used by
+    both `pollVideoGeneration` and the webhook route.
+  - [x] `submitVideoGeneration` no longer forks — it always `update`s the same
+    scene (persisting the latest script / visual guide / type / language / model /
+    sound / images) and resets it to `IN_QUEUE` with the new `requestId`; the
+    previous `videoUrl`/versions are left intact until the new run succeeds
+    (invariant #7). Return narrowed to `{ requestId }`.
+  - [x] `SceneData` gains `versions: SceneVersionData[] { id, videoUrl }`; the
+    page loader includes + maps them ordered oldest→newest; `makeTempScene` seeds
+    `versions: []`.
+  - [x] `scene-editor.tsx` — version switcher reuses `MetaSelect`
+    (label "Version", options "1..N", wrapped in `ml-auto`), shown only when
+    versions exist. Local `versions`/`selectedVersionId` default to the latest on
+    load (req: reload → latest); switching is purely client-side. A completed poll
+    appends + selects the new version; the right panel shows the loader whenever a
+    job is in queue/in-progress (resume-on-mount unchanged) and otherwise the
+    selected version's `<video>` (keyed by version so it reloads on switch). The
+    two Generate/Regenerate buttons collapsed into one (label flips on
+    `versions.length`). Fork-restore branch removed.
+  - [x] `tsc --noEmit`, `eslint` (only the pre-existing unused-`logs` warning from
+    the `09` refactor remains), and `next build` all clean.
+
 - Editor shell restructured into a horizontal split: the **sidebar now spans the
   full screen height** and hosts the brand/workspace switcher as its header
   (moved out of the navbar's old left `w-64` cell, which made the navbar look
@@ -320,6 +356,14 @@ change.
   The hardcoded 9:16 requirement is satisfied with the `aspect-portrait` token +
   `object-contain` on the `<video>`, avoiding an invalid param that would break
   submission.
+- **Regeneration versions, it does not fork** (spec 12): a regenerate updates the
+  same `Scene` row in place and appends a `SceneVersion` (videoUrl only) on
+  completion, rather than creating a new scene. The scene is the unit of
+  configuration (one script/model/etc.); versions are its generated-video history.
+  Completion is funnelled through a single status-guarded `completeScene` so the
+  poll loop and webhook — which can both report the same finish — never
+  double-append. A failed regenerate leaves the prior versions/`videoUrl` intact
+  (invariant #7).
 - **Minimal Project model first; owner and logs deferred**: the persistence
   schema intentionally omits any `userId`/owner field (no auth provider yet) and
   does not persist Fal.ai `logs` — logs are re-fetchable from Fal via the stored

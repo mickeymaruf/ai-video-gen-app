@@ -42,6 +42,7 @@ function makeTempScene(): SceneData {
     sound: true,
     startImageUrl: null,
     endImageUrl: null,
+    versions: [],
   };
 }
 

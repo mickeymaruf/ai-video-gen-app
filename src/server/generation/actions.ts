@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { fal } from "@/lib/fal";
 import { prisma } from "@/lib/prisma";
+import { completeScene } from "@/server/generation/complete";
 import { buildModelInput, getVideoModel } from "@/lib/video-models";
 import type { VideoOutput, PollResult } from "@/types/generation";
 import type { AspectRatio } from "@/types/project";
@@ -44,13 +45,14 @@ async function resolveImageUrl(
 
 /**
  * Persists the scene's inputs, queues a 9:16 image-to-video job, and stores the
- * request id + status so the run survives a refresh. A scene that has already
- * run forks a new scene instead of overwriting its result.
+ * request id + status so the run survives a refresh. Regenerating updates the
+ * same scene in place (a new version is appended on completion) — previous
+ * `videoUrl`/versions are left untouched until the new run succeeds (invariant #7).
  */
 export async function submitVideoGeneration(
   sceneId: string,
   formData: FormData,
-): Promise<{ sceneId: string; requestId: string }> {
+): Promise<{ requestId: string }> {
   const scene = await prisma.scene.findUniqueOrThrow({
     where: { id: sceneId },
     include: { project: true },
@@ -102,36 +104,29 @@ export async function submitVideoGeneration(
     webhookUrl,
   });
 
-  const data = {
-    script,
-    visualGuide,
-    type,
-    language,
-    model: model.id,
-    sound,
-    imageUrl,
-    startImageUrl,
-    endImageUrl,
-    requestId: request_id,
-    status: "IN_QUEUE" as const,
-    videoUrl: null,
-    error: null,
-  };
-
-  const alreadyRan =
-    scene.status === "COMPLETED" || scene.status === "ERROR" || !!scene.requestId;
-  const target = alreadyRan
-    ? await prisma.scene.create({
-        data: {
-          projectId: scene.projectId,
-          order: await prisma.scene.count({ where: { projectId: scene.projectId } }),
-          ...data,
-        },
-      })
-    : await prisma.scene.update({ where: { id: sceneId }, data });
+  // Always update the same scene — regenerate appends a version on completion
+  // rather than forking a new scene. The previous videoUrl is left intact so a
+  // failed run never clobbers the last good output (invariant #7).
+  await prisma.scene.update({
+    where: { id: sceneId },
+    data: {
+      script,
+      visualGuide,
+      type,
+      language,
+      model: model.id,
+      sound,
+      imageUrl,
+      startImageUrl,
+      endImageUrl,
+      requestId: request_id,
+      status: "IN_QUEUE",
+      error: null,
+    },
+  });
 
   revalidatePath(`/editor/${scene.projectId}`);
-  return { sceneId: target.id, requestId: request_id };
+  return { requestId: request_id };
 }
 
 /** One poll cycle: live status + logs, persisting status (and the URL once done). */
@@ -159,9 +154,6 @@ export async function pollVideoGeneration(
   const result = await fal.queue.result(modelId, { requestId });
   const output = result.data as VideoOutput;
   const videoUrl = output.video?.url ?? null;
-  await prisma.scene.update({
-    where: { id: sceneId },
-    data: { status: "COMPLETED", videoUrl },
-  });
+  await completeScene(sceneId, videoUrl);
   return { status: "COMPLETED", logs, videoUrl };
 }

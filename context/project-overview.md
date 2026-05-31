@@ -1,12 +1,12 @@
 # Project Overview
 
-This application allows users to generate AI video ads from product images and text prompts. Users create projects, build multiple scenes, upload product references, choose a video model, and generate videos through Fal.ai. Generated scenes can be combined and exported as a final advertisement.
+This application allows users to generate AI video ads from product images and text prompts. Users create projects, build multiple scenes, upload product references, choose a video model, and generate videos through Fal.ai. Generated scenes can be versioned and exported as a final advertisement.
 
 ## Goals
 
 1. Generate AI video ads from product images.
 2. Support multi-scene video projects.
-3. Allow scene-level prompt and model customization.
+3. Allow scene-versioning and prompt and model customization.
 4. Provide a simple workflow for non-technical users.
 5. Export generated scenes into a final video.
 
@@ -20,32 +20,37 @@ This application allows users to generate AI video ads from product images and t
 6. Select language, style, and model.
 7. Generate video.
 8. Review the result.
-9. Repeat for additional scenes.
-10. Export the final video.
+9. Refine with versioning.
+10. Repeat for additional scenes/versioning.
+11. Export selected versions of videos for all scenes in a project.
 
 ## Features
 
 ### Projects
 - Create project
 - Rename project
-- Delete project
+- Set Video Aspect Ratio
 
 ### Inputs
 - Script prompt
-- Visual guidance prompt
+- Visual Guide prompt
 - Product image uploads
+- Start Reference Image (optional)
+- End Reference Image (optional)
 
 ### Generation
-- Model selection
+- Video Type selection (UGC, Cinematic, Product, Lifestyle)
 - Language selection
+- Audio Toggle (On/Off)
+- Model selection
 - Generate video
 - Regenerate video
 - Status tracking
 
 ### Output
 - Video preview
-- Scene management
-- Export final video
+- Scene/Version management
+- Export final videos for all scenes in a project with only selected version.
 
 ## In Scope
 

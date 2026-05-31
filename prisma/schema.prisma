@@ -52,12 +52,26 @@ model Scene {
   // fal.ai job state (this is what survives refresh)
   requestId String? // fal queue request id — used to resume polling
   status    GenStatus @default(IDLE)
-  videoUrl  String? // populated on COMPLETED
+  videoUrl  String? // latest generated video (mirrors the newest version)
   error     String? // populated on ERROR
+
+  versions SceneVersion[] // generated video history (one row per completed run)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([projectId])
   @@index([requestId])
+}
+
+// One generated video for a scene. A regenerate appends a version instead of
+// forking a new scene; the editor's version switcher toggles between them.
+model SceneVersion {
+  id        String   @id @default(cuid())
+  sceneId   String
+  scene     Scene    @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+  videoUrl  String
+  createdAt DateTime @default(now())
+
+  @@index([sceneId])
 }

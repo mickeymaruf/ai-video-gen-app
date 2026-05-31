@@ -26,6 +26,7 @@ import {
   LANGUAGE_OPTIONS,
   TYPE_OPTIONS,
   type SceneData,
+  type SceneVersionData,
 } from "@/types/project";
 import { cn } from "@/lib/utils";
 
@@ -38,10 +39,12 @@ const TYPE_SELECT_OPTIONS: SelectOption[] = TYPE_OPTIONS.map((value) => ({
   value,
   label: value,
 }));
-const LANGUAGE_SELECT_OPTIONS: SelectOption[] = LANGUAGE_OPTIONS.map((value) => ({
-  value,
-  label: value,
-}));
+const LANGUAGE_SELECT_OPTIONS: SelectOption[] = LANGUAGE_OPTIONS.map(
+  (value) => ({
+    value,
+    label: value,
+  }),
+);
 const MODEL_SELECT_OPTIONS: SelectOption[] = VIDEO_MODELS.map((model) => ({
   value: model.id,
   label: model.label,
@@ -142,9 +145,10 @@ function SoundToggle({
  * Main scene configuration canvas.
  *
  * Controlled from the persisted `scene`: script + visual guidance prompts, the
- * product image reference, and the primary Generate action. Re-mounts per scene
- * (keyed by id), resumes polling for jobs still running after a refresh, and
- * forks a new scene when re-generating one that already produced a video.
+ * product image reference, and the primary Generate action. Resumes polling for
+ * jobs still running after a refresh. Regenerating updates this same scene and
+ * appends a new video version (no new card); the header's version switcher
+ * toggles between previously generated videos, defaulting to the latest on load.
  *
  * A temporary scene (`isTemporary`) is a client-only card with no DB row yet; it
  * is persisted via `createScene` on the first Generate, after which `onPersisted`
@@ -186,9 +190,23 @@ export function SceneEditor({
   const model = getVideoModel(modelId);
   const [status, setStatus] = useState<GenStatus>(scene.status);
   const [logs, setLogs] = useState<GenerationLog[]>([]);
-  const [videoUrl, setVideoUrl] = useState<string | null>(scene.videoUrl);
+  const [versions, setVersions] = useState<SceneVersionData[]>(scene.versions);
+  // Default to the latest version on load; switching is purely client-side.
+  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(
+    scene.versions.at(-1)?.id ?? null,
+  );
   const [error, setError] = useState<string | null>(scene.error);
   const [notice, setNotice] = useState<string | null>(null);
+
+  const selectedVideoUrl =
+    versions.find((version) => version.id === selectedVersionId)?.videoUrl ??
+    null;
+  const versionOptions: SelectOption[] = versions
+    .map((version, i) => ({
+      value: version.id,
+      label: String(i + 1),
+    }))
+    .reverse();
 
   const isGenerating =
     status === "SUBMITTING" ||
@@ -201,11 +219,22 @@ export function SceneEditor({
   async function runPoll(requestId: string, modelToPoll: string) {
     try {
       for (;;) {
-        const result = await pollVideoGeneration(scene.id, requestId, modelToPoll);
+        const result = await pollVideoGeneration(
+          scene.id,
+          requestId,
+          modelToPoll,
+        );
         setLogs(result.logs);
         setStatus(result.status);
         if (result.status === "COMPLETED") {
-          setVideoUrl(result.videoUrl);
+          if (result.videoUrl) {
+            const version = {
+              id: crypto.randomUUID(),
+              videoUrl: result.videoUrl,
+            };
+            setVersions((prev) => [...prev, version]);
+            setSelectedVersionId(version.id);
+          }
           router.refresh();
           break;
         }
@@ -249,7 +278,6 @@ export function SceneEditor({
     setStatus("SUBMITTING");
     setError(null);
     setNotice(null);
-    setVideoUrl(null);
     setLogs([]);
 
     try {
@@ -274,26 +302,12 @@ export function SceneEditor({
       // A temporary scene has no DB row yet — persist it before submitting so
       // the job has a scene to attach to (this is the only moment it persists).
       const targetId = isTemporary ? await createScene(projectId) : scene.id;
-      const { sceneId, requestId } = await submitVideoGeneration(
-        targetId,
-        formData,
-      );
+      const { requestId } = await submitVideoGeneration(targetId, formData);
 
       if (isTemporary) {
         // The temp card is now a real IN_QUEUE scene: drop it and reload so the
         // persisted scene mounts and resumes polling from its stored status.
         onPersisted?.();
-        router.refresh();
-        return;
-      }
-
-      if (sceneId !== scene.id) {
-        // This scene already produced a result, so generation forked a new
-        // scene. Restore this card to its finished state and reload — the new
-        // scene appears below and resumes polling on mount.
-        setStatus(scene.status);
-        setVideoUrl(scene.videoUrl);
-        setNotice("Started a new scene from this one below.");
         router.refresh();
         return;
       }
@@ -330,6 +344,16 @@ export function SceneEditor({
           options={MODEL_SELECT_OPTIONS}
           onChange={setModelId}
         />
+        {versions.length > 0 && (
+          <div className="ml-auto">
+            <MetaSelect
+              label="Version"
+              value={selectedVersionId ?? ""}
+              options={versionOptions}
+              onChange={setSelectedVersionId}
+            />
+          </div>
+        )}
       </div>
 
       {/* Body: left content column + right 9:16 video panel */}
@@ -417,21 +441,22 @@ export function SceneEditor({
         {/* Right: 9:16 video preview + generation controls */}
         <div className="flex w-64 shrink-0 flex-col gap-3">
           <div className="relative flex aspect-portrait w-full overflow-hidden rounded-lg border border-border bg-muted">
-            {videoUrl ? (
-              <video
-                src={videoUrl}
-                controls
-                autoPlay
-                loop
-                className="size-full object-contain bg-foreground"
-              />
-            ) : isGenerating ? (
+            {isGenerating ? (
               <div className="flex size-full flex-col items-center justify-center gap-2 text-muted-foreground">
                 <Loader2 className="size-6 animate-spin text-primary" />
                 <span className="text-xs text-center px-2">
                   {STATUS_LABEL[status]}
                 </span>
               </div>
+            ) : selectedVideoUrl ? (
+              <video
+                key={selectedVersionId}
+                src={selectedVideoUrl}
+                controls
+                autoPlay
+                loop
+                className="size-full object-contain bg-foreground"
+              />
             ) : null}
           </div>
 
@@ -445,21 +470,17 @@ export function SceneEditor({
           >
             {isGenerating ? (
               <Loader2 className="size-4 animate-spin" />
+            ) : versions.length > 0 ? (
+              <RefreshCw className="size-4" />
             ) : (
               <Sparkles className="size-4" />
             )}
-            {isGenerating ? "Generating…" : "Generate"}
+            {isGenerating
+              ? "Generating…"
+              : versions.length > 0
+                ? "Regenerate"
+                : "Generate"}
           </Button>
-
-          {videoUrl && !isGenerating && (
-            <Button
-              onClick={handleGenerate}
-              className="h-10 w-full rounded-lg text-sm font-semibold"
-            >
-              <RefreshCw className="size-4" />
-              Regenerate
-            </Button>
-          )}
         </div>
       </div>
     </Card>

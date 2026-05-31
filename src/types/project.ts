@@ -44,6 +44,12 @@ export const LANGUAGE_OPTIONS: string[] = [
   "Portuguese (Brazil)",
 ];
 
+/** One generated video in a scene's history — toggled via the version switcher. */
+export interface SceneVersionData {
+  id: string;
+  videoUrl: string;
+}
+
 /** The editor's view of a single scene — serializable, no Prisma Date fields. */
 export interface SceneData {
   id: string;
@@ -61,4 +67,6 @@ export interface SceneData {
   sound: boolean;
   startImageUrl: string | null;
   endImageUrl: string | null;
+  // generated video history (oldest → newest)
+  versions: SceneVersionData[];
 }

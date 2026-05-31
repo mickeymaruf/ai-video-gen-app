@@ -24,7 +24,12 @@ export default async function ProjectEditorPage({
     }),
     prisma.project.findUnique({
       where: { id: projectId },
-      include: { scenes: { orderBy: { order: "asc" } } },
+      include: {
+        scenes: {
+          orderBy: { order: "asc" },
+          include: { versions: { orderBy: { createdAt: "asc" } } },
+        },
+      },
     }),
   ]);
 
@@ -45,6 +50,7 @@ export default async function ProjectEditorPage({
     sound: scene.sound,
     startImageUrl: scene.startImageUrl,
     endImageUrl: scene.endImageUrl,
+    versions: scene.versions.map((v) => ({ id: v.id, videoUrl: v.videoUrl })),
   }));
 
   return (

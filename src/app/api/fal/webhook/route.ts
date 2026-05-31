@@ -2,6 +2,7 @@ import { revalidatePath } from "next/cache";
 
 import { verifyFalWebhook } from "@/lib/fal-webhook";
 import { prisma } from "@/lib/prisma";
+import { completeScene } from "@/server/generation/complete";
 
 export const runtime = "nodejs";
 
@@ -39,12 +40,15 @@ export async function POST(req: Request): Promise<Response> {
   if (!scene) return new Response("ok", { status: 200 });
 
   const succeeded = body.status === "OK" && body.payload != null;
-  await prisma.scene.update({
-    where: { id: scene.id },
-    data: succeeded
-      ? { status: "COMPLETED", videoUrl: body.payload?.video?.url ?? null, error: null }
-      : { status: "ERROR", error: body.error ?? body.payload_error ?? "Generation failed." },
-  });
+  if (succeeded) {
+    // Marks COMPLETED and appends a version (idempotent across webhook retries).
+    await completeScene(scene.id, body.payload?.video?.url ?? null);
+  } else {
+    await prisma.scene.update({
+      where: { id: scene.id },
+      data: { status: "ERROR", error: body.error ?? body.payload_error ?? "Generation failed." },
+    });
+  }
 
   revalidatePath(`/editor/${scene.projectId}`);
   return new Response("ok", { status: 200 });
