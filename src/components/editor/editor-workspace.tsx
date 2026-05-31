@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { EditorNavbar } from "@/components/editor/editor-navbar";
@@ -45,12 +45,8 @@ function makeTempScene(): SceneData {
   };
 }
 
-/** Scroll the scrollable scene area to a scene's anchor card. */
-function scrollToScene(sceneId: string, behavior: ScrollBehavior = "smooth") {
-  document
-    .getElementById(`scene-${sceneId}`)
-    ?.scrollIntoView({ behavior, block: "start" });
-}
+/** Breathing room (px) left above a scene when it's scrolled to the top. */
+const SCENE_SCROLL_OFFSET = 24;
 
 /**
  * The editor shell for a single project: a full-height sidebar (scene list +
@@ -58,13 +54,19 @@ function scrollToScene(sceneId: string, behavior: ScrollBehavior = "smooth") {
  * vertically-stacked scene cards scroll beneath it.
  *
  * All of the project's scenes render at once — navigation is scrolling, not a
- * full page navigation. Clicking a scene smooth-scrolls to its card and writes
- * a shareable `#scene-<id>` hash to the URL (via history.replaceState, so it
- * neither re-renders nor adds history entries); opening such a link jumps
- * straight to that scene on load. "Add Scene" appends a temporary scene to
- * client state for instant feedback; it only becomes a DB row when the user
- * generates on it, at which point the temp card is dropped and the persisted
- * scene is reloaded.
+ * full page navigation. Clicking a scene scrolls its card to the top of the
+ * scene column and writes a shareable `#scene-<id>` hash to the URL (via
+ * history.replaceState, so it neither re-renders nor adds history entries);
+ * opening such a link jumps straight to that scene on load. "Add Scene" appends
+ * a temporary scene to client state for instant feedback; it only becomes a DB
+ * row when the user generates on it, at which point the temp card is dropped
+ * and the persisted scene is reloaded.
+ *
+ * The scroll targets the inner column directly (container.scrollTo) rather than
+ * element.scrollIntoView(): scrollIntoView cascades up every scroll ancestor
+ * and, because the column sits below the fixed navbar, would scroll the whole
+ * document to align the scene to the viewport top — shoving the navbar out of
+ * view. Scrolling the container keeps the movement contained to the column.
  */
 export function EditorWorkspace({
   title,
@@ -73,18 +75,37 @@ export function EditorWorkspace({
   scenes,
 }: EditorWorkspaceProps) {
   const router = useRouter();
+  const scrollRef = useRef<HTMLElement>(null);
   const [tempScenes, setTempScenes] = useState<SceneData[]>([]);
 
   const allScenes = [...scenes, ...tempScenes];
 
+  // Scroll ONLY the scene column to a card by setting the container's scrollTop
+  // directly — never the window. (See the component doc for why scrollIntoView
+  // is avoided here.)
+  const scrollToScene = useCallback(
+    (sceneId: string, behavior: ScrollBehavior = "smooth") => {
+      const container = scrollRef.current;
+      const target = document.getElementById(`scene-${sceneId}`);
+      if (!container || !target) return;
+      const top =
+        container.scrollTop +
+        target.getBoundingClientRect().top -
+        container.getBoundingClientRect().top -
+        SCENE_SCROLL_OFFSET;
+      container.scrollTo({ top: Math.max(0, top), behavior });
+    },
+    [],
+  );
+
   // Honor a shared `#scene-<id>` link by jumping to that scene on load.
   useEffect(() => {
-    const id = window.location.hash.slice(1);
-    if (!id.startsWith("scene-")) return;
-    requestAnimationFrame(() =>
-      document.getElementById(id)?.scrollIntoView({ block: "start" }),
-    );
-  }, []);
+    const hash = window.location.hash.slice(1);
+    if (!hash.startsWith("scene-")) return;
+    const sceneId = hash.slice("scene-".length);
+    // Wait for layout, then jump instantly (no animation on first paint).
+    requestAnimationFrame(() => scrollToScene(sceneId, "auto"));
+  }, [scrollToScene]);
 
   const handleAddScene = () => {
     const tempScene = makeTempScene();
@@ -106,7 +127,7 @@ export function EditorWorkspace({
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="fixed inset-0 flex overflow-hidden bg-background">
       <EditorSidebar
         projects={projects}
         scenes={allScenes.map((scene, index) => ({
@@ -121,7 +142,10 @@ export function EditorWorkspace({
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <EditorNavbar title={title} />
-        <main className="min-h-0 flex-1 overflow-y-auto p-6">
+        <main
+          ref={scrollRef}
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-6"
+        >
           <div className="flex flex-col gap-6">
             {allScenes.length === 0 ? (
               <p className="text-sm text-muted-foreground">No scenes yet.</p>
