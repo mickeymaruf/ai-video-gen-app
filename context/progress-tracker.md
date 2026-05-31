@@ -12,8 +12,9 @@ change.
 - Projects/scenes persisted in Postgres and driving the editor: create projects,
   view all of a project's scenes on one scrollable page (navigate by scrolling /
   sidebar anchors), add scenes optimistically (persist on Generate), and resume
-  Fal.ai jobs after a refresh from the stored per-scene status. Next: multi-image
-  support, project/scene management (rename/delete/reorder), and export.
+  Fal.ai jobs after a refresh from the stored per-scene status. Now planning
+  **export** (download each scene's currently-selected video version). Next:
+  multi-image support and project/scene management (rename/delete/reorder).
 
 ## Completed
 
@@ -161,6 +162,35 @@ change.
 - None.
 
 ## Completed (continued)
+
+- `13-export-scene-videos.md` — the navbar **Export** button now downloads every
+  scene's video, using only the **currently selected version** of each scene
+  (respecting a manual switch away from the latest). Client-only,
+  direct-from-CDN — no server action, no zip dependency (lightest + fastest).
+  Tasks:
+  - [x] `src/lib/download.ts` — `downloadFile(url, filename)`: `fetch` → `blob` →
+    object URL → transient `<a download>` → revoke. Required because a bare
+    cross-origin `<a download>` on a fal.media URL navigates instead of
+    downloading; the blob fetch relies on fal.media's (already-used) CORS.
+  - [x] Per-scene selected video URL lifted to `EditorWorkspace`:
+    `selectedVideos: Record<sceneId, videoUrl | null>` fed by a new
+    `onSelectedVideoChange` prop on `SceneEditor` (a `useEffect([selectedVideoUrl])`
+    reports load-default / version-switch / new-completion). The workspace setter
+    bails on no-op (same ref) so the per-render child callbacks can't loop.
+  - [x] `editor-navbar.tsx` (`'use client'`, now has an onClick) — accepts
+    optional `onExport` + `exportCount`; Export `Button` wired to `onExport`,
+    `disabled` when `exportCount === 0`. Props optional so the server-rendered
+    empty-state `/editor` page still composes the navbar unchanged (button
+    disabled there).
+  - [x] `editor-workspace.tsx` — `handleExport` walks `allScenes` in order and
+    sequentially `downloadFile`s each selected URL as `scene-<n>.mp4` (n = scene
+    position, matching the "Scene #N" label). Only scenes with a successful,
+    selected video are included (invariant #6); temp / version-less / in-progress
+    scenes are skipped, and `exportCount` drives the disabled state.
+  - [x] `tsc --noEmit` and `eslint` clean (only the pre-existing unused-`logs`
+    warning from the `09` refactor remains); `next build` succeeds (the earlier
+    exit-134 was an environment worker OOM — passes with a raised
+    `--max-old-space-size`).
 
 - `12-scene-video-versions.md` — scene **forking replaced with per-scene video
   versions**: regenerating keeps the same scene card and appends a new version; a
@@ -331,7 +361,8 @@ change.
 - End-to-end webhook test with a tunnel + real fal job (set `APP_URL`, generate,
   leave the page, confirm the scene reaches `COMPLETED` from the webhook alone).
 - Multi-image handling (model stores a single `imageUrl`; only the first product
-  image is sent). Project rename/delete + scene delete/reorder. Export.
+  image is sent). Project rename/delete + scene delete/reorder. (Export now in
+  progress — see `13-export-scene-videos.md`.)
 
 ## Open Questions
 

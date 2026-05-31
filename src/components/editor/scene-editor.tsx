@@ -160,12 +160,14 @@ export function SceneEditor({
   index,
   isTemporary = false,
   onPersisted,
+  onSelectedVideoChange,
 }: {
   projectId: string;
   scene: SceneData;
   index: number;
   isTemporary?: boolean;
   onPersisted?: () => void;
+  onSelectedVideoChange?: (videoUrl: string | null) => void;
 }) {
   const router = useRouter();
   const [productImages, setProductImages] = useState<File[]>([]);
@@ -212,6 +214,11 @@ export function SceneEditor({
     status === "SUBMITTING" ||
     status === "IN_QUEUE" ||
     status === "IN_PROGRESS";
+
+  // Report the currently selected video up so the navbar Export can collect it.
+  useEffect(() => {
+    onSelectedVideoChange?.(selectedVideoUrl);
+  }, [selectedVideoUrl, onSelectedVideoChange]);
 
   // Poll for live status/logs until the 9:16 video is ready. Transient errors
   // are NOT terminal: the webhook (and resume-on-mount) reconcile the real result,

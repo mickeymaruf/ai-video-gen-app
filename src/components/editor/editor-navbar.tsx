@@ -1,3 +1,5 @@
+"use client";
+
 import { Button } from "@/components/ui/button";
 
 /**
@@ -7,7 +9,15 @@ import { Button } from "@/components/ui/button";
  * status, and the primary Export action. (The brand/workspace switcher now
  * lives in the sidebar header, which spans the full screen height.)
  */
-export function EditorNavbar({ title }: { title: string }) {
+export function EditorNavbar({
+  title,
+  onExport,
+  exportCount = 0,
+}: {
+  title: string;
+  onExport?: () => void;
+  exportCount?: number;
+}) {
   return (
     <header className="flex h-16 shrink-0 items-center gap-4 border-b bg-card px-6">
       <h1 className="text-base font-bold text-foreground">{title}</h1>
@@ -27,7 +37,12 @@ export function EditorNavbar({ title }: { title: string }) {
         </button>
       </div>
 
-      <Button size="lg" className="ml-auto h-9 rounded-lg px-5 font-semibold">
+      <Button
+        size="lg"
+        onClick={onExport}
+        disabled={exportCount === 0}
+        className="ml-auto h-9 rounded-lg px-5 font-semibold"
+      >
         Export
       </Button>
     </header>

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { EditorNavbar } from "@/components/editor/editor-navbar";
 import { EditorSidebar } from "@/components/editor/editor-sidebar";
 import { SceneEditor } from "@/components/editor/scene-editor";
+import { downloadFile } from "@/lib/download";
 import { DEFAULT_MODEL_ID } from "@/lib/video-models";
 import {
   LANGUAGE_OPTIONS,
@@ -78,8 +79,36 @@ export function EditorWorkspace({
   const router = useRouter();
   const scrollRef = useRef<HTMLElement>(null);
   const [tempScenes, setTempScenes] = useState<SceneData[]>([]);
+  // Each scene reports the video URL of its currently selected version here so
+  // the navbar's Export can download exactly what's on screen. Bail on no-op
+  // updates (same ref) so the per-render child callbacks can't loop.
+  const [selectedVideos, setSelectedVideos] = useState<
+    Record<string, string | null>
+  >({});
 
   const allScenes = [...scenes, ...tempScenes];
+
+  const handleSelectedVideoChange = useCallback(
+    (sceneId: string, videoUrl: string | null) => {
+      setSelectedVideos((prev) =>
+        prev[sceneId] === videoUrl ? prev : { ...prev, [sceneId]: videoUrl },
+      );
+    },
+    [],
+  );
+
+  // Download every scene's currently selected video, named by scene order.
+  // Only scenes with a successful, selected video are included (invariant #6);
+  // sequential so the browser groups them into one permission prompt.
+  const exportable = allScenes
+    .map((scene, index) => ({ url: selectedVideos[scene.id], index }))
+    .filter((s): s is { url: string; index: number } => Boolean(s.url));
+
+  const handleExport = async () => {
+    for (const { url, index } of exportable) {
+      await downloadFile(url, `scene-${index + 1}.mp4`);
+    }
+  };
 
   // Scroll ONLY the scene column to a card by setting the container's scrollTop
   // directly — never the window. (See the component doc for why scrollIntoView
@@ -142,7 +171,11 @@ export function EditorWorkspace({
       />
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <EditorNavbar title={title} />
+        <EditorNavbar
+          title={title}
+          onExport={handleExport}
+          exportCount={exportable.length}
+        />
         <main
           ref={scrollRef}
           className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-6"
@@ -165,6 +198,9 @@ export function EditorWorkspace({
                       scene={scene}
                       isTemporary={isTemporary}
                       onPersisted={() => handleScenePersisted(scene.id)}
+                      onSelectedVideoChange={(url) =>
+                        handleSelectedVideoChange(scene.id, url)
+                      }
                     />
                   </div>
                 );
