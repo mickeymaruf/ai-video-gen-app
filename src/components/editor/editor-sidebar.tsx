@@ -1,13 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Image as ImageIcon, Loader2, Plus, Settings, Video } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { ProjectSettingsModal } from "@/components/editor/project-settings-modal";
-import { createScene } from "@/server/projects/actions";
 import type { ProjectSummary, SceneSummary } from "@/types/project";
 import { cn } from "@/lib/utils";
 
@@ -15,7 +13,10 @@ interface EditorSidebarProps {
   projects: ProjectSummary[];
   scenes: SceneSummary[];
   activeProjectId?: string;
-  activeSceneId?: string;
+  /** Append a temporary scene client-side (instant, persists only on Generate). */
+  onAddScene?: () => void;
+  /** Smooth-scroll the main area to a scene's anchor card. */
+  onSelectScene?: (sceneId: string) => void;
 }
 
 /** Small status indicator shown next to each scene in the tree. */
@@ -30,19 +31,20 @@ function SceneStatus({ status }: { status: SceneSummary["status"] }) {
 
 /**
  * Left navigation sidebar. Lists every project; the active project expands to a
- * selectable scene tree. "New Project" opens the creation modal (name + aspect
- * ratio) and the per-project gear opens the same modal in settings mode. "Add
- * Scene" persists via a server action then navigates to the new scene.
+ * scene list. "New Project" opens the creation modal (name + aspect ratio) and
+ * the per-project gear opens the same modal in settings mode. Clicking a scene
+ * smooth-scrolls the main area to its card; "Add Scene" appends a temporary
+ * scene client-side (it only persists once the user generates on it).
  */
 export function EditorSidebar({
   projects,
   scenes,
   activeProjectId,
-  activeSceneId,
+  onAddScene,
+  onSelectScene,
 }: EditorSidebarProps) {
-  const router = useRouter();
-  const [pending, startTransition] = useTransition();
   const [modalOpen, setModalOpen] = useState(false);
+  const [selectedSceneId, setSelectedSceneId] = useState<string | undefined>();
   const [modalConfig, setModalConfig] = useState<{
     mode: "create" | "settings";
     project?: ProjectSummary;
@@ -58,11 +60,9 @@ export function EditorSidebar({
     setModalOpen(true);
   };
 
-  const addScene = () => {
-    if (!activeProjectId) return;
-    startTransition(async () =>
-      router.push(`/editor/${activeProjectId}?scene=${await createScene(activeProjectId)}`),
-    );
+  const selectScene = (sceneId: string) => {
+    setSelectedSceneId(sceneId);
+    onSelectScene?.(sceneId);
   };
 
   return (
@@ -103,13 +103,14 @@ export function EditorSidebar({
               {isActive && (
                 <div className="ml-3 mt-0.5 flex flex-col gap-1 border-l-2 border-primary pl-3">
                   {scenes.map((scene, index) => {
-                    const selected = scene.id === activeSceneId;
+                    const selected = scene.id === selectedSceneId;
                     return (
-                      <Link
+                      <button
                         key={scene.id}
-                        href={`/editor/${project.id}?scene=${scene.id}`}
+                        type="button"
+                        onClick={() => selectScene(scene.id)}
                         className={cn(
-                          "flex items-center gap-2 rounded-md px-2 py-2 transition-colors",
+                          "flex items-center gap-2 rounded-md px-2 py-2 text-left transition-colors",
                           selected
                             ? "bg-accent text-accent-foreground"
                             : "text-foreground hover:bg-muted",
@@ -123,17 +124,16 @@ export function EditorSidebar({
                         />
                         <span className="flex-1 truncate text-left">Scene #{index + 1}</span>
                         <SceneStatus status={scene.status} />
-                      </Link>
+                      </button>
                     );
                   })}
 
                   <button
                     type="button"
-                    onClick={addScene}
-                    disabled={pending}
+                    onClick={() => onAddScene?.()}
                     className="mt-1 flex items-center justify-center gap-1.5 rounded-md border border-dashed border-border px-2 py-2 text-xs font-medium tracking-wide text-muted-foreground uppercase transition-colors hover:bg-muted hover:text-foreground"
                   >
-                    {pending ? <Loader2 className="size-3.5 animate-spin" /> : <Plus className="size-3.5" />}
+                    <Plus className="size-3.5" />
                     Add Scene
                   </button>
                 </div>

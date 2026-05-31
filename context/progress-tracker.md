@@ -9,10 +9,11 @@ change.
 
 ## Current Goal
 
-- Projects/scenes persisted in Postgres and driving the editor: create projects
-  and scenes, navigate via `/editor/[projectId]?scene=`, and resume Fal.ai jobs
-  after a refresh from the stored per-scene status. Next: multi-image support,
-  project/scene management (rename/delete/reorder), and export.
+- Projects/scenes persisted in Postgres and driving the editor: create projects,
+  view all of a project's scenes on one scrollable page (navigate by scrolling /
+  sidebar anchors), add scenes optimistically (persist on Generate), and resume
+  Fal.ai jobs after a refresh from the stored per-scene status. Next: multi-image
+  support, project/scene management (rename/delete/reorder), and export.
 
 ## Completed
 
@@ -160,6 +161,34 @@ change.
 - None.
 
 ## Completed (continued)
+
+- `11.scene-layout-navigation.md` — all of a project's scenes now render on one
+  scrollable page (navigation is scrolling, not a `?scene=` query), and "Add
+  Scene" is an instant client-side action that only persists on Generate. Tasks:
+  - [x] `src/components/editor/editor-workspace.tsx` (new client coordinator) —
+    owns the optimistic temp-scene state shared between the sidebar scene list
+    and the main scene stack (sibling subtrees, so the shared state needs a
+    common client parent). Renders the sidebar + the vertically stacked scene
+    cards (each wrapped in an anchor `#scene-<id>`, `scroll-mt-6`); Add Scene
+    appends a blank temp `SceneData` (fields mirror the `Scene` model defaults)
+    and smooth-scrolls to it via `scrollIntoView`; persisting a temp scene drops
+    it from state and `router.refresh()`es.
+  - [x] `src/app/editor/[projectId]/page.tsx` — dropped `?scene=`/`searchParams`;
+    loads every scene as `SceneData[]` and renders `<EditorWorkspace>` (navbar
+    stays in the page).
+  - [x] `editor-sidebar.tsx` — scene entries are now smooth-scroll buttons (local
+    `selectedSceneId` highlight, `onSelectScene` callback) instead of `?scene=`
+    `Link`s; "Add Scene" calls `onAddScene` (instant, no DB write — removed the
+    `createScene`/`useRouter`/`useTransition` path). `onAddScene`/`onSelectScene`/
+    `activeProjectId` are optional so the empty-state `/editor` page still
+    compiles unchanged.
+  - [x] `scene-editor.tsx` — Generate on a temporary scene first persists it via
+    `createScene(projectId)` then submits with the real id; fork (regenerate)
+    navigation switched from a `?scene=` push to `router.refresh()` + restoring
+    the card's finished state + a soft notice. New `isTemporary`/`onPersisted`
+    props.
+  - [x] `tsc --noEmit`, `eslint` (only the pre-existing unused-`logs` warning
+    from the `09` refactor remains), and `next build` all clean.
 
 - `10-model-config.md` — Type / Language / Model are now real, and Sound +
   Start/End cards feed generation per the selected model's capabilities. Tasks:

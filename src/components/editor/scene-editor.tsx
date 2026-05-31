@@ -19,6 +19,7 @@ import {
   pollVideoGeneration,
   submitVideoGeneration,
 } from "@/server/generation/actions";
+import { createScene } from "@/server/projects/actions";
 import { getVideoModel, VIDEO_MODELS } from "@/lib/video-models";
 import type { GenerationLog, GenStatus } from "@/types/generation";
 import {
@@ -144,15 +145,23 @@ function SoundToggle({
  * product image reference, and the primary Generate action. Re-mounts per scene
  * (keyed by id), resumes polling for jobs still running after a refresh, and
  * forks a new scene when re-generating one that already produced a video.
+ *
+ * A temporary scene (`isTemporary`) is a client-only card with no DB row yet; it
+ * is persisted via `createScene` on the first Generate, after which `onPersisted`
+ * lets the parent drop the temp card and reload the real, persisted scene.
  */
 export function SceneEditor({
   projectId,
   scene,
   index,
+  isTemporary = false,
+  onPersisted,
 }: {
   projectId: string;
   scene: SceneData;
   index: number;
+  isTemporary?: boolean;
+  onPersisted?: () => void;
 }) {
   const router = useRouter();
   const [productImages, setProductImages] = useState<File[]>([]);
@@ -262,14 +271,33 @@ export function SceneEditor({
           formData.set("endImageUrl", existingEndImage);
       }
 
+      // A temporary scene has no DB row yet — persist it before submitting so
+      // the job has a scene to attach to (this is the only moment it persists).
+      const targetId = isTemporary ? await createScene(projectId) : scene.id;
       const { sceneId, requestId } = await submitVideoGeneration(
-        scene.id,
+        targetId,
         formData,
       );
-      if (sceneId !== scene.id) {
-        router.push(`/editor/${projectId}?scene=${sceneId}`);
+
+      if (isTemporary) {
+        // The temp card is now a real IN_QUEUE scene: drop it and reload so the
+        // persisted scene mounts and resumes polling from its stored status.
+        onPersisted?.();
+        router.refresh();
         return;
       }
+
+      if (sceneId !== scene.id) {
+        // This scene already produced a result, so generation forked a new
+        // scene. Restore this card to its finished state and reload — the new
+        // scene appears below and resumes polling on mount.
+        setStatus(scene.status);
+        setVideoUrl(scene.videoUrl);
+        setNotice("Started a new scene from this one below.");
+        router.refresh();
+        return;
+      }
+
       await runPoll(requestId, modelId);
     } catch (cause) {
       setStatus("ERROR");
