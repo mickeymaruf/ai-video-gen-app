@@ -16,11 +16,11 @@ export default async function EditorPage() {
   if (projects.length > 0) redirect(`/editor/${projects[0].id}`);
 
   return (
-    <div className="flex h-screen flex-col bg-background">
-      <EditorNavbar title="New Project" />
-      <div className="flex flex-1 overflow-hidden">
-        <EditorSidebar projects={[]} scenes={[]} />
-        <main className="flex flex-1 items-center justify-center p-6">
+    <div className="flex h-screen overflow-hidden bg-background">
+      <EditorSidebar projects={[]} scenes={[]} />
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <EditorNavbar title="New Project" />
+        <main className="flex min-h-0 flex-1 items-center justify-center p-6">
           <p className="text-sm text-muted-foreground">
             Create your first project to get started.
           </p>

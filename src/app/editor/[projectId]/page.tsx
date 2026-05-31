@@ -1,14 +1,14 @@
 import { notFound } from "next/navigation";
 
-import { EditorNavbar } from "@/components/editor/editor-navbar";
 import { EditorWorkspace } from "@/components/editor/editor-workspace";
 import { prisma } from "@/lib/prisma";
 import type { AspectRatio, SceneData } from "@/types/project";
 
 /**
  * Editor for a single project. Every scene is rendered at once on a scrollable
- * page (navigation is scrolling, not a `?scene=` query); each scene's persisted
- * status drives whether its editor resumes polling after a refresh.
+ * page; navigation is scrolling (with a shareable `#scene-<id>` hash), not a
+ * full page navigation. Each scene's persisted status drives whether its editor
+ * resumes polling after a refresh.
  */
 export default async function ProjectEditorPage({
   params,
@@ -48,16 +48,14 @@ export default async function ProjectEditorPage({
   }));
 
   return (
-    <div className="flex h-screen flex-col bg-background">
-      <EditorNavbar title={project.title} />
-      <EditorWorkspace
-        projects={projects.map((p) => ({
-          ...p,
-          aspectRatio: p.aspectRatio as AspectRatio,
-        }))}
-        activeProjectId={project.id}
-        scenes={scenes}
-      />
-    </div>
+    <EditorWorkspace
+      title={project.title}
+      projects={projects.map((p) => ({
+        ...p,
+        aspectRatio: p.aspectRatio as AspectRatio,
+      }))}
+      activeProjectId={project.id}
+      scenes={scenes}
+    />
   );
 }

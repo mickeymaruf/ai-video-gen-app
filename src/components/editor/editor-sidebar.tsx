@@ -2,9 +2,24 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Image as ImageIcon, Loader2, Plus, Settings, Video } from "lucide-react";
+import {
+  ChevronDown,
+  Image as ImageIcon,
+  Loader2,
+  Plus,
+  Settings,
+  Triangle,
+  Video,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { ProjectSettingsModal } from "@/components/editor/project-settings-modal";
 import type { ProjectSummary, SceneSummary } from "@/types/project";
 import { cn } from "@/lib/utils";
@@ -30,11 +45,13 @@ function SceneStatus({ status }: { status: SceneSummary["status"] }) {
 }
 
 /**
- * Left navigation sidebar. Lists every project; the active project expands to a
- * scene list. "New Project" opens the creation modal (name + aspect ratio) and
- * the per-project gear opens the same modal in settings mode. Clicking a scene
- * smooth-scrolls the main area to its card; "Add Scene" appends a temporary
- * scene client-side (it only persists once the user generates on it).
+ * Left navigation sidebar. Spans the full screen height; its header hosts the
+ * brand/workspace switcher (aligned with the navbar across the split). Lists
+ * every project; the active project expands to a scene list. "New Project"
+ * opens the creation modal (name + aspect ratio) and the per-project gear opens
+ * the same modal in settings mode. Clicking a scene smooth-scrolls the main
+ * area to its card; "Add Scene" appends a temporary scene client-side (it only
+ * persists once the user generates on it).
  */
 export function EditorSidebar({
   projects,
@@ -66,16 +83,37 @@ export function EditorSidebar({
   };
 
   return (
-    <aside className="flex w-64 shrink-0 flex-col gap-4 overflow-y-auto border-r bg-card p-4">
-      <Button
-        onClick={openCreate}
-        className="h-11 w-full rounded-lg text-sm font-semibold"
-      >
-        <Plus className="size-4" />
-        New Project
-      </Button>
+    <aside className="flex w-64 shrink-0 flex-col border-r bg-card">
+      {/* Brand switcher — sidebar header, aligned with the navbar height */}
+      <div className="flex h-16 shrink-0 items-center border-b px-4">
+        <DropdownMenu>
+          <DropdownMenuTrigger className="flex h-11 w-full items-center gap-2 rounded-lg border border-border bg-card px-3 text-left transition-colors hover:bg-muted focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 outline-none">
+            <Triangle className="size-3 fill-foreground text-foreground" />
+            <span className="flex-1 truncate text-sm font-semibold">
+              Cohete Brand
+            </span>
+            <ChevronDown className="size-4 text-muted-foreground" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="w-(--anchor-width)">
+            <DropdownMenuItem>Cohete Brand</DropdownMenuItem>
+            <DropdownMenuItem>Add another brand</DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem>Workspace settings</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
 
-      <nav className="flex flex-col gap-1 text-sm">
+      {/* Scrollable project + scene navigation */}
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
+        <Button
+          onClick={openCreate}
+          className="h-11 w-full rounded-lg text-sm font-semibold"
+        >
+          <Plus className="size-4" />
+          New Project
+        </Button>
+
+        <nav className="flex flex-col gap-1 text-sm">
         {projects.map((project) => {
           const isActive = project.id === activeProjectId;
           return (
@@ -141,7 +179,8 @@ export function EditorSidebar({
             </div>
           );
         })}
-      </nav>
+        </nav>
+      </div>
 
       <ProjectSettingsModal
         open={modalOpen}

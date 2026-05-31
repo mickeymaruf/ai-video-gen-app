@@ -162,6 +162,28 @@ change.
 
 ## Completed (continued)
 
+- Editor shell restructured into a horizontal split: the **sidebar now spans the
+  full screen height** and hosts the brand/workspace switcher as its header
+  (moved out of the navbar's old left `w-64` cell, which made the navbar look
+  like a sidebar header). The **navbar is confined to the right column** as a
+  fixed-height (`h-16`), non-scrolling flex row pinned above the scene area; the
+  scenes live in a `min-h-0 flex-1 overflow-y-auto` `<main>` (the flex "app
+  shell" pattern — effectively `calc(100vh - navbar)` without a hard-coded calc).
+  - [x] `editor-workspace.tsx` now owns the whole shell (sidebar + right column
+    navbar + scrollable main) and takes a `title` prop. Sidebar scene clicks
+    keep the existing fast `scrollIntoView({ behavior: "smooth" })` **and** write
+    a shareable `#scene-<id>` hash via `history.replaceState` (no navigation /
+    re-render / history spam). A mount effect honors an incoming `#scene-<id>`
+    link by jumping to that scene on load.
+  - [x] `editor-navbar.tsx` — dropped the brand-switcher cell; clean
+    `h-16 shrink-0` header (title, billing, fal.ai status, Export).
+  - [x] `editor-sidebar.tsx` — `w-64` aside is now a full-height flex column: a
+    `h-16` brand-switcher header (border-aligned with the navbar) over a
+    `min-h-0 flex-1 overflow-y-auto` nav region (New Project + scene tree).
+  - [x] `/editor/[projectId]/page.tsx` renders `<EditorWorkspace title=… />`
+    only (navbar no longer composed at the page level); `/editor/page.tsx`
+    empty state mirrors the new split. `tsc --noEmit` and `eslint` clean.
+
 - `11.scene-layout-navigation.md` — all of a project's scenes now render on one
   scrollable page (navigation is scrolling, not a `?scene=` query), and "Add
   Scene" is an instant client-side action that only persists on Generate. Tasks:
